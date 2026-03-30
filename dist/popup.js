@@ -1,57 +1,62 @@
 "use strict";
-function extractProductDataFromPage() {
-    const titleElement = document.querySelector("h1") ||
-        document.querySelector("[data-testid='product-name']") ||
-        document.querySelector(".product-name");
-    const productName = titleElement?.textContent?.trim() || "Unknown product";
-    let brandName = "Unknown brand";
-    const hostname = window.location.hostname;
-    if (hostname.includes("zara.com")) {
-        brandName = "ZARA";
-    }
-    else if (hostname.includes("terminalx.com")) {
-        brandName = "TERMINAL X";
-    }
-    return { productName, brandName };
-}
 document.addEventListener("DOMContentLoaded", async () => {
     const productNameEl = document.getElementById("productName");
     const brandNameEl = document.getElementById("brandName");
+    const debugHostnameEl = document.getElementById("debugHostname");
+    const debugBrandEl = document.getElementById("debugBrand");
+    const debugProductEl = document.getElementById("debugProduct");
     const searchBtn = document.getElementById("searchBtn");
-    let currentProduct = {
-        productName: "Not found",
-        brandName: "Not found"
-    };
     try {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        const tab = tabs[0];
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab?.id) {
             productNameEl.textContent = "No active tab";
             brandNameEl.textContent = "No active tab";
             return;
         }
-        const results = await chrome.scripting.executeScript({
+        const injected = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            func: extractProductDataFromPage
+            func: () => {
+                return {
+                    hostname: window.location.hostname,
+                    title: document.title,
+                    brand1: document.querySelector("a[class*='brandName']")?.textContent?.trim() || null,
+                    brand2: document.querySelector("[title*='brand page']")?.textContent?.trim() || null,
+                    product1: document.querySelector("div[class^='product-name_']")?.textContent?.trim() || null,
+                    product2: document.querySelector("#pdp-description-content div[class*='product-name']")?.textContent?.trim() || null
+                };
+            }
         });
-        const data = results[0]?.result;
-        if (data) {
-            currentProduct = data;
-            productNameEl.textContent = data.productName;
-            brandNameEl.textContent = data.brandName;
+        const data = injected[0]?.result;
+        if (!data) {
+            productNameEl.textContent = "No data returned";
+            brandNameEl.textContent = "No data returned";
+            debugHostnameEl.textContent = "no data";
+            debugBrandEl.textContent = "no data";
+            debugProductEl.textContent = "no data";
+            return;
         }
-        else {
-            productNameEl.textContent = "No data found";
-            brandNameEl.textContent = "No data found";
-        }
+        const brand = data.brand1 || data.brand2 || "not found";
+        let rawTitle = data.title || "";
+        const englishMatch = rawTitle.match(/[A-Z][A-Z\s]{3,}/);
+        let product = englishMatch
+            ? englishMatch[0].replace(/\s+/g, " ").trim()
+            : "not found";
+        productNameEl.textContent = product;
+        brandNameEl.textContent = brand;
+        debugHostnameEl.textContent = `${data.hostname || "none"} | ${data.title || "no title"}`;
+        debugBrandEl.textContent = `brand1=${data.brand1 ?? "null"} | brand2=${data.brand2 ?? "null"}`;
+        debugProductEl.textContent = `product1=${data.product1 ?? "null"} | product2=${data.product2 ?? "null"}`;
     }
     catch (error) {
         productNameEl.textContent = "Could not read page";
         brandNameEl.textContent = "Could not read page";
+        debugHostnameEl.textContent = "error";
+        debugBrandEl.textContent = String(error);
+        debugProductEl.textContent = "error";
         console.error(error);
     }
     searchBtn.addEventListener("click", () => {
-        const query = `${currentProduct.brandName} ${currentProduct.productName} official store`;
+        const query = `${brandNameEl.textContent} ${productNameEl.textContent} official store`;
         const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
         chrome.tabs.create({ url });
     });
