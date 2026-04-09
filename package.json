@@ -6,6 +6,9 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.1.38",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.2",
     "typescript": "^5.9.3"
   },
   "description": "",
@@ -15,6 +18,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@google-cloud/vision": "^5.3.5"
+    "@google-cloud/vision": "^5.3.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
   }
 }

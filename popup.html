@@ -9,13 +9,19 @@
   <div class="container">
     <h2>Smart Shopping Assistant</h2>
 
-    <p><strong>Product:</strong> <span id="productName">Not found</span></p>
-    <p><strong>Brand:</strong> <span id="brandName">Not found</span></p>
+    <div class="card">
+      <p><strong>Product:</strong> <span id="productName">Loading...</span></p>
+      <p><strong>Brand:</strong> <span id="brandName">Loading...</span></p>
+    </div>
 
-    <button id="searchBtn">Search Original Store</button>
-    <p><strong>Debug hostname:</strong> <span id="debugHostname"></span></p>
-    <p><strong>Debug brand:</strong> <span id="debugBrand"></span></p>
-    <p><strong>Debug product:</strong> <span id="debugProduct"></span></p>
+    <button id="searchBtn">Search Product</button>
+
+    <div id="resultsList"></div>
+
+    <hr />
+    <div style="font-size: 10px; color: #999; word-break: break-all;">
+      <p><strong>Debug Image:</strong> <span id="debugHostname"></span></p>
+    </div>
   </div>
 
   <script src="dist/popup.js"></script>
