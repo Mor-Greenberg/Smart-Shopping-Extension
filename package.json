@@ -19,7 +19,10 @@
   "type": "commonjs",
   "dependencies": {
     "@google-cloud/vision": "^5.3.5",
+    "axios": "^1.15.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "playwright": "^1.59.1"
   }
 }
