@@ -128,167 +128,8 @@ function looksLikeOfficialBrandUrl(url, brand) {
     return false;
   }
 }
-function buildOfficialSearchUrl(brand, product) {
-  const refined = refineProductForSearch(product);
-  const b = normalizeText(brand).toLowerCase();
 
-  if (b.includes('adidas')) {
-    return `https://www.adidas.com/search?q=${encodeURIComponent(refined)}`;
-  }
 
-  if (b.includes('new balance')) {
-    return `https://www.newbalance.com/search?q=${encodeURIComponent(refined)}`;
-  }
-
-  if (b.includes('nike')) {
-    return `https://www.nike.com/w?q=${encodeURIComponent(refined)}`;
-  }
-
-  if (b.includes('vans')) {
-    return `https://www.vans.com/en-us/search?q=${encodeURIComponent(refined)}`;
-  }
-
-  return null;
-}
-async function findProductOnOfficialSite(brand, product) {
-  const searchUrl = buildOfficialSearchUrl(brand, product);
-
-  if (!searchUrl) return null;
-
-  const blockedPatterns = [
-    'shipping',
-    'returns',
-    'help',
-    'help-page',
-    'delivery',
-    'faq',
-    'customer-service',
-    'support',
-    'login',
-    'signup',
-    'register'
-  ];
-
-  const refinedProduct = refineProductForSearch(product);
-  const productWords = refinedProduct.split(/\s+/).filter(Boolean);
-
-  let browser;
-
-  try {
-browser = await chromium.launch({
-  headless: true,
-  channel: 'chrome'
-});    const page = await browser.newPage({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36'
-    });
-
-    console.log('OFFICIAL SEARCH URL:', searchUrl);
-
-    await page.goto(searchUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000
-    });
-
-    await page.waitForTimeout(4000);
-
-    const pageTitle = await page.title();
-    console.log('PAGE TITLE:', pageTitle);
-
-    const links = await page.$$eval('a', (anchors) =>
-      anchors.map((a) => ({
-        href: a.href,
-        text: (a.textContent || '').trim()
-      }))
-    );
-
-    console.log('TOTAL LINKS ON PAGE:', links.length);
-
-    const candidates = [];
-
-    for (const link of links) {
-      if (!link.href) continue;
-
-      const lowerUrl = link.href.toLowerCase();
-      const lowerText = (link.text || '').toLowerCase();
-      if (lowerUrl.includes('/search')) {
-  console.log('SKIP SEARCH URL:', link.href);
-  continue;
-}
-
-if (lowerUrl.includes('#main-content')) {
-  console.log('SKIP MAIN CONTENT URL:', link.href);
-  continue;
-}
-
-if (lowerUrl === searchUrl.toLowerCase()) {
-  console.log('SKIP SAME AS SEARCH URL:', link.href);
-  continue;
-}
-
-      if (!looksLikeOfficialBrandUrl(link.href, brand)) continue;
-
-      let blocked = false;
-      for (const pattern of blockedPatterns) {
-        if (lowerUrl.includes(pattern) || lowerText.includes(pattern)) {
-          blocked = true;
-          break;
-        }
-      }
-      if (blocked) continue;
-
-      let score = 0;
-
-if (
-  lowerUrl.includes('/product') ||
-  lowerUrl.includes('/products') ||
-  lowerUrl.includes('/p/') ||
-  lowerUrl.includes('/pd/') ||
-  lowerUrl.includes('/t-') ||
-  lowerUrl.includes('.html')
-) {
-  score += 20;
-}
-if (
-  lowerUrl.includes('/c/') ||
-  lowerUrl.includes('/about/') ||
-  lowerUrl.includes('/help') ||
-  lowerUrl.includes('/cart')
-) {
-  score -= 10;
-}
-      for (const word of productWords) {
-        if (word.length < 3) continue;
-        if (lowerUrl.includes(word)) score += 5;
-        if (lowerText.includes(word)) score += 3;
-      }
-
-      if (lowerText.length > 0 && lowerText.length < 120) {
-        score += 1;
-      }
-
-      if (score > 0) {
-        candidates.push({
-          url: link.href,
-          text: link.text,
-          score
-        });
-      }
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-
-    console.log('OFFICIAL SEARCH CANDIDATES:', candidates.slice(0, 10));
-
-    return candidates[0]?.url || null;
-  } catch (err) {
-    console.error('Official search failed:', err.message);
-    return null;
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
-  }
-}
 function scoreUrl(url, brand, product) {
   const lowerUrl = (url || '').toLowerCase();
   const refinedProduct = refineProductForSearch(product);
@@ -390,8 +231,6 @@ function chooseBestLink(pages, brand, product) {
   const officialCandidates = uniquePages.filter(p =>
     looksLikeOfficialBrandUrl(p.url, brand)
   );
-  console.log('ALL PAGES:', uniquePages.map(p => p.url));
-console.log('BRAND CANDIDATES:', buildBrandCandidates(brand));
 
   console.log('BRAND:', brand);
   console.log('PRODUCT:', product);
@@ -565,11 +404,8 @@ console.log('SEARCH QUERY:', searchQuery);
       return res.status(400).json({ error: 'imageUrl is required' });
     }
 
-    console.log('REQUEST BODY:', req.body);
 
-let officialLink = null;
 
-console.log('OFFICIAL SEARCH DISABLED');
 
     const webDetection = await detectWeb(imageUrl);
 
@@ -603,15 +439,11 @@ const selection = chooseBestLink(uniqueCandidatePages, brand, product);
 console.log('SELECTION:', selection);
 
 return res.json({
-  found: !!selection.bestLink || !!officialLink,
+  found: !!selection.bestLink,
   bestLink: selection.bestLink,
-  officialLink: officialLink || null,
   alternatives: selection.alternatives,
-  debug: {
-    ...(selection.debug || {}),
-    officialLink
-  },
-rawPages: uniqueCandidatePages
+  debug: selection.debug || {},
+  rawPages: uniqueCandidatePages
 });
 
   } catch (error) {
