@@ -234,7 +234,6 @@ function chooseBestLink(pages, brand, product) {
 
   console.log('BRAND:', brand);
   console.log('PRODUCT:', product);
-  console.log('OFFICIAL CANDIDATES:', officialCandidates);
 
   if (officialCandidates.length > 0) {
     const scoredOfficial = officialCandidates
