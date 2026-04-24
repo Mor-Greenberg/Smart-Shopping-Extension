@@ -4,6 +4,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { detectWeb } = require('./visionService');
 const { chromium } = require('playwright');
+const crypto = require('crypto');
 const BRAVE_API_KEY = 'BSAC2UVJ9tlKaTnrXFL7WvL4kOGuM2p';
 
 const { Pool } = require('pg');
@@ -42,10 +43,58 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+app.post('/products/find-or-create', async (req, res) => {
+  const { brand, product_name, source_url } = req.body;
+
+  try {
+    // 1. למצוא brand
+    let brandResult = await pool.query(
+      `SELECT id FROM brands WHERE name = $1`,
+      [brand]
+    );
+
+    let brandId;
+
+    if (brandResult.rows.length === 0) {
+      const insertBrand = await pool.query(
+        `INSERT INTO brands (name, official_url)
+         VALUES ($1, '')
+         RETURNING id`,
+        [brand]
+      );
+      brandId = insertBrand.rows[0].id;
+    } else {
+      brandId = brandResult.rows[0].id;
+    }
+
+    let productResult = await pool.query(
+      `SELECT id FROM products WHERE name = $1 AND brand_id = $2`,
+      [product_name, brandId]
+    );
+
+    if (productResult.rows.length > 0) {
+      return res.json({ product_id: productResult.rows[0].id });
+    }
+
+const newProductId = crypto.randomUUID();
+
+const newProduct = await pool.query(
+  `INSERT INTO products (id, name, brand_id, source_url)
+   VALUES ($1, $2, $3, $4)
+   RETURNING id`,
+  [newProductId, product_name, brandId, source_url]
+);
+
+    res.json({ product_id: newProduct.rows[0].id });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error finding/creating product');
+  }
+});
 
 app.post('/event', async (req, res) => {
-  const { user_id, product_id, event_type, duration_seconds } = req.body;
-
+const { user_id, product_id, event_type, duration_seconds, session_id } = req.body;
   try {
     if (duration_seconds < 10) {
       return res.status(200).send('Ignored (too short)');
@@ -59,10 +108,14 @@ app.post('/event', async (req, res) => {
     );
 
     await pool.query(
-      `INSERT INTO user_events (user_id, product_id, event_type, duration_seconds)
-       VALUES ($1, $2, $3, $4)`,
-      [user_id, product_id, event_type, duration_seconds]
-    );
+  `
+  INSERT INTO user_events (user_id, product_id, event_type, duration_seconds, session_id)
+  VALUES ($1, $2, $3, $4, $5)
+  ON CONFLICT (session_id)
+  DO UPDATE SET duration_seconds = EXCLUDED.duration_seconds
+  `,
+  [user_id, product_id, event_type, duration_seconds, session_id]
+);
 
     res.send('Event saved');
   } catch (err) {

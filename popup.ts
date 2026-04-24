@@ -271,6 +271,17 @@ currentImageUrl = data.image || "";
 currentProductUrl = data.url || "";
 currentRawTitle = rawTitle || "";
 
+await chrome.storage.local.set({
+  current_product_context: {
+    brand: currentBrand,
+    product_name: currentProduct,
+    source_url: currentProductUrl,
+    image_url: currentImageUrl,
+    raw_title: currentRawTitle,
+    updated_at: Date.now()
+  }
+});
+
     productNameEl.textContent = currentProduct;
     brandNameEl.textContent = currentBrand;
 
