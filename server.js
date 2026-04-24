@@ -6,10 +6,95 @@ const { detectWeb } = require('./visionService');
 const { chromium } = require('playwright');
 const BRAVE_API_KEY = 'BSAC2UVJ9tlKaTnrXFL7WvL4kOGuM2p';
 
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  user: 'postgres',
+  host: 'localhost',
+  database: 'smart_shopping_db',
+  password: 'morgreenberg',
+  port: 5432,
+});
+
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('DB Error:', err);
+  } else {
+    console.log('DB Connected:', res.rows);
+  }
+});
+
 const app = express();
 
-app.use(cors());
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Private-Network", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+
 app.use(express.json());
+
+
+app.post('/event', async (req, res) => {
+  const { user_id, product_id, event_type, duration_seconds } = req.body;
+
+  try {
+    if (duration_seconds < 10) {
+      return res.status(200).send('Ignored (too short)');
+    }
+
+    await pool.query(
+      `INSERT INTO users (id)
+       VALUES ($1)
+       ON CONFLICT (id) DO NOTHING`,
+      [user_id]
+    );
+
+    await pool.query(
+      `INSERT INTO user_events (user_id, product_id, event_type, duration_seconds)
+       VALUES ($1, $2, $3, $4)`,
+      [user_id, product_id, event_type, duration_seconds]
+    );
+
+    res.send('Event saved');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error saving event');
+  }
+});
+app.get('/recommendations/:userId', async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        b.name AS brand,
+        SUM(ew.weight) AS score
+      FROM user_events ue
+      JOIN products p ON ue.product_id = p.id
+      JOIN brands b ON p.brand_id = b.id
+      JOIN event_weights ew ON ue.event_type = ew.event_type
+      WHERE ue.user_id = $1
+        AND ue.duration_seconds >= 10
+      GROUP BY b.name
+      ORDER BY score DESC
+      LIMIT 3
+    `, [userId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error getting recommendations');
+  }
+});
 
 function normalizeText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
