@@ -4,6 +4,26 @@ let currentProduct = "not found";
 let currentImageUrl = "";
 let currentProductUrl = "";
 let currentRawTitle = "";
+async function loadRecommendations() {
+    const { user_id } = await chrome.storage.local.get(["user_id"]);
+    if (!user_id)
+        return;
+    const res = await fetch(`http://localhost:3000/recommendations/${user_id}`);
+    const data = await res.json();
+    console.log("Recommendations:", data);
+    renderRecommendations(data);
+}
+function renderRecommendations(recs) {
+    const container = document.getElementById("recommendations");
+    if (!container)
+        return;
+    container.innerHTML = "";
+    recs.forEach(r => {
+        const div = document.createElement("div");
+        div.textContent = `${r.brand} (score: ${Math.round(r.score)})`;
+        container.appendChild(div);
+    });
+}
 function extractStore(hostname) {
     const knownStores = [
         "asos",
@@ -81,6 +101,19 @@ function buildGoogleFallbackUrl(brand, product) {
     }
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
+async function updateAlertButtonState(productId) {
+    const createAlertBtn = document.getElementById("createAlertBtn");
+    const alertStatusEl = document.getElementById("alertStatus");
+    const userId = "11111111-1111-1111-1111-111111111111";
+    const res = await fetch(`http://localhost:3000/stock-alerts/${userId}/${productId}/status`);
+    const data = await res.json();
+    if (data.exists) {
+        createAlertBtn.disabled = true;
+        createAlertBtn.textContent = "Alert already created";
+        alertStatusEl.textContent = " You are already tracking this product";
+        alertStatusEl.style.color = "green";
+    }
+}
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("POPUP LOADED");
     const productNameEl = document.getElementById("productName");
@@ -90,6 +123,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const debugProductEl = document.getElementById("debugProduct");
     const searchBtn = document.getElementById("searchBtn");
     const resultsListEl = document.getElementById("resultsList");
+    const alertStatusEl = document.getElementById("alertStatus");
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab?.id) {
@@ -97,6 +131,31 @@ document.addEventListener("DOMContentLoaded", async () => {
             brandNameEl.textContent = "No active tab";
             return;
         }
+        const createAlertBtn = document.getElementById("createAlertBtn");
+        createAlertBtn.addEventListener("click", () => {
+            const productId = window.currentProductId;
+            if (!productId) {
+                console.error("No product ID");
+                return;
+            }
+            chrome.runtime.sendMessage({
+                type: "CREATE_STOCK_ALERT",
+                payload: {
+                    product_id: productId
+                }
+            }, (response) => {
+                if (response?.ok) {
+                    alertStatusEl.textContent = "✅ Alert created successfully";
+                    alertStatusEl.style.color = "green";
+                    createAlertBtn.disabled = true;
+                    createAlertBtn.textContent = "Alert created";
+                }
+                else {
+                    alertStatusEl.textContent = "❌ Failed to create alert";
+                    alertStatusEl.style.color = "red";
+                }
+            });
+        });
         const injected = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: () => {
@@ -217,6 +276,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                 updated_at: Date.now()
             }
         });
+        chrome.runtime.sendMessage({
+            type: "FIND_OR_CREATE_PRODUCT",
+            payload: {
+                brand: currentBrand,
+                product_name: currentProduct,
+                source_url: currentProductUrl
+            }
+        }, (response) => {
+            if (response?.ok) {
+                const productId = response.data.product_id;
+                console.log("Product ID:", productId);
+                window.currentProductId = productId;
+                updateAlertButtonState(productId);
+            }
+            else {
+                console.error("Failed to create/find product", response?.error);
+            }
+        });
         productNameEl.textContent = currentProduct;
         brandNameEl.textContent = currentBrand;
         debugHostnameEl.textContent = `${hostname} | ${rawTitle}`;
@@ -276,4 +353,5 @@ document.addEventListener("DOMContentLoaded", async () => {
             await chrome.tabs.create({ url: fallbackUrl });
         }
     });
+    await loadRecommendations();
 });

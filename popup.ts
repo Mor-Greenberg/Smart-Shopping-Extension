@@ -4,6 +4,31 @@ let currentImageUrl = "";
 let currentProductUrl = "";
 let currentRawTitle = "";
 
+async function loadRecommendations() {
+  const { user_id } = await chrome.storage.local.get(["user_id"]);
+
+  if (!user_id) return;
+
+  const res = await fetch(`http://localhost:3000/recommendations/${user_id}`);
+  const data = await res.json();
+
+  console.log("Recommendations:", data);
+
+  renderRecommendations(data);
+}
+function renderRecommendations(recs: any[]) {
+  const container = document.getElementById("recommendations");
+
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  recs.forEach(r => {
+    const div = document.createElement("div");
+    div.textContent = `${r.brand} (score: ${Math.round(r.score)})`;
+    container.appendChild(div);
+  });
+}
 function extractStore(hostname: string): string {
   const knownStores = [
     "asos",
@@ -102,7 +127,25 @@ function buildGoogleFallbackUrl(brand: string, product: string): string {
 
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
+async function updateAlertButtonState(productId: string) {
+  const createAlertBtn = document.getElementById("createAlertBtn") as HTMLButtonElement;
+  const alertStatusEl = document.getElementById("alertStatus") as HTMLParagraphElement;
 
+  const userId = "11111111-1111-1111-1111-111111111111";
+
+  const res = await fetch(
+    `http://localhost:3000/stock-alerts/${userId}/${productId}/status`
+  );
+
+  const data = await res.json();
+
+  if (data.exists) {
+    createAlertBtn.disabled = true;
+    createAlertBtn.textContent = "Alert already created";
+    alertStatusEl.textContent = " You are already tracking this product";
+    alertStatusEl.style.color = "green";
+  }
+}
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("POPUP LOADED");
 
@@ -113,6 +156,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const debugProductEl = document.getElementById("debugProduct") as HTMLSpanElement;
   const searchBtn = document.getElementById("searchBtn") as HTMLButtonElement;
   const resultsListEl = document.getElementById("resultsList") as HTMLDivElement;
+  const alertStatusEl = document.getElementById("alertStatus") as HTMLParagraphElement;
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -123,6 +167,38 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    const createAlertBtn = document.getElementById("createAlertBtn") as HTMLButtonElement;
+
+createAlertBtn.addEventListener("click", () => {
+  const productId = (window as any).currentProductId;
+
+  if (!productId) {
+    console.error("No product ID");
+    return;
+  }
+
+  chrome.runtime.sendMessage(
+    {
+      type: "CREATE_STOCK_ALERT",
+      payload: {
+        product_id: productId
+      }
+    },
+   (response) => {
+  if (response?.ok) {
+  alertStatusEl.textContent = "✅ Alert created successfully";
+  alertStatusEl.style.color = "green";
+
+  createAlertBtn.disabled = true;
+  createAlertBtn.textContent = "Alert created";
+
+  } else {
+    alertStatusEl.textContent = "❌ Failed to create alert";
+    alertStatusEl.style.color = "red";
+  }
+}
+  );
+  });
     const injected = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
@@ -281,7 +357,28 @@ await chrome.storage.local.set({
     updated_at: Date.now()
   }
 });
+chrome.runtime.sendMessage(
+  {
+    type: "FIND_OR_CREATE_PRODUCT",
+    payload: {
+      brand: currentBrand,
+      product_name: currentProduct,
+      source_url: currentProductUrl
+    }
+  },
+  (response) => {
+    if (response?.ok) {
+      const productId = response.data.product_id;
 
+      console.log("Product ID:", productId);
+
+      (window as any).currentProductId = productId;
+      updateAlertButtonState(productId);
+    } else {
+      console.error("Failed to create/find product", response?.error);
+    }
+  }
+);
     productNameEl.textContent = currentProduct;
     brandNameEl.textContent = currentBrand;
 
@@ -350,5 +447,7 @@ await chrome.storage.local.set({
       await chrome.tabs.create({ url: fallbackUrl });
     }
   });
+
+      await loadRecommendations();
+
   });
-  
