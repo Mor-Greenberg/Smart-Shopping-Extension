@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { detectWeb } = require('./visionService');
@@ -93,6 +94,36 @@ const newProduct = await pool.query(
   }
 });
 
+app.post('/products/:id/purchase', async (req, res) => {
+  const productId = req.params.id;
+
+  try {
+    await pool.query(
+      `
+      UPDATE products
+      SET purchased = TRUE,
+          purchased_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [productId]
+    );
+
+    await pool.query(
+      `
+      UPDATE stock_alerts
+      SET is_active = FALSE
+      WHERE product_id = $1
+      `,
+      [productId]
+    );
+
+    res.json({ ok: true, message: 'Product marked as purchased' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: 'Error marking product as purchased' });
+  }
+});
+
 app.post('/event', async (req, res) => {
 const { user_id, product_id, event_type, duration_seconds, session_id } = req.body;
   try {
@@ -123,6 +154,76 @@ const { user_id, product_id, event_type, duration_seconds, session_id } = req.bo
     res.status(500).send('Error saving event');
   }
 });
+
+app.post('/stock-alerts', async (req, res) => {
+  const { user_id, product_id } = req.body;
+
+  try {
+    await pool.query(
+      `INSERT INTO stock_alerts (user_id, product_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, product_id)
+       DO UPDATE SET is_active = TRUE, requested_at = CURRENT_TIMESTAMP`,
+      [user_id, product_id]
+    );
+
+    res.json({ ok: true, message: 'Stock alert saved' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: 'Error saving stock alert' });
+  }
+});
+app.get('/stock-alerts/:userId/:productId/status', async (req, res) => {
+  const { userId, productId } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT id, is_active, notified_at
+      FROM stock_alerts
+      WHERE user_id = $1
+        AND product_id = $2
+        AND is_active = TRUE
+      LIMIT 1
+      `,
+      [userId, productId]
+    );
+
+    res.json({
+      exists: result.rows.length > 0,
+      alert: result.rows[0] || null
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ exists: false, error: 'Error checking stock alert status' });
+  }
+});
+app.get('/stock-alerts/:userId/available', async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const result = await pool.query(`
+      SELECT 
+        sa.id AS alert_id,
+        p.id AS product_id,
+        p.name AS product_name,
+        b.name AS brand,
+        p.source_url
+      FROM stock_alerts sa
+      JOIN products p ON sa.product_id = p.id
+      JOIN brands b ON p.brand_id = b.id
+      WHERE sa.user_id = $1
+        AND sa.is_active = TRUE
+        AND p.in_stock = TRUE
+        AND sa.notified_at IS NULL
+    `, [userId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error checking stock alerts' });
+  }
+});
 app.get('/recommendations/:userId', async (req, res) => {
   const userId = req.params.userId;
 
@@ -148,6 +249,7 @@ app.get('/recommendations/:userId', async (req, res) => {
     res.status(500).send('Error getting recommendations');
   }
 });
+
 
 function normalizeText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
@@ -591,6 +693,112 @@ return res.json({
   }
 });
 
+async function checkProductStock(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
+
+    const pageText = response.data.toLowerCase();
+
+    const outOfStockWords = [
+      'out of stock',
+      'sold out',
+      'אזל מהמלאי',
+      'לא במלאי'
+    ];
+
+    const isOutOfStock = outOfStockWords.some(word =>
+      pageText.includes(word.toLowerCase())
+    );
+
+    return !isOutOfStock;
+  } catch (err) {
+    console.error('Stock check failed:', err.message);
+    return false;
+  }
+}
+
+cron.schedule('0 0 * * *', async () => {
+    console.log('Running stock check job...');
+
+  try {
+    const result = await pool.query(`
+      SELECT p.id, p.name, p.source_url
+      FROM products p
+      JOIN stock_alerts sa ON sa.product_id = p.id
+      WHERE sa.is_active = TRUE
+        AND p.purchased = FALSE
+    `);
+
+    for (const product of result.rows) {
+      if (!product.source_url) continue;
+
+      const inStock = await checkProductStock(product.source_url);
+
+      console.log(`Product: ${product.name} | In stock: ${inStock}`);
+
+      await pool.query(
+        `
+        UPDATE products
+        SET in_stock = $1
+        WHERE id = $2
+        `,
+        [inStock, product.id]
+      );
+
+      if (inStock) {
+        const alerts = await pool.query(
+          `
+          SELECT id, user_id
+          FROM stock_alerts
+          WHERE product_id = $1
+            AND is_active = TRUE
+            AND notified_at IS NULL
+          `,
+          [product.id]
+        );
+
+        for (const alert of alerts.rows) {
+          console.log(`Notify user ${alert.user_id} that ${product.name} is back in stock`);
+
+          await pool.query(
+            `
+            UPDATE stock_alerts
+            SET notified_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            `,
+            [alert.id]
+          );
+        }
+      }
+    }
+
+  } catch (err) {
+    console.error('Cron error:', err);
+  }
+});
+app.post('/stock-alerts/mark-notified', async (req, res) => {
+  const { alert_id } = req.body;
+
+  try {
+    await pool.query(
+      `
+      UPDATE stock_alerts
+      SET notified_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [alert_id]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
 app.listen(3000, () => {
   console.log('Server running on http://localhost:3000');
 });
