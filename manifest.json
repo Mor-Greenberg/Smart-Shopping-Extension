@@ -1,28 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Smart Shopping Assistant",
+  "name": "Adidas Price Checker",
   "version": "1.0",
-  "permissions": [
-    "scripting",
-    "activeTab",
-    "storage",
-    "notifications"
-
-  ],
-  "host_permissions": [
-    "<all_urls>",
-    "http://localhost:3000/*"
-  ],
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://localhost:3000/*"],
   "action": {
     "default_popup": "popup.html"
   },
-  "background": {
-    "service_worker": "background.js"
-  },
   "content_scripts": [
     {
-      "matches": [ "<all_urls>" ],
-      "js": [ "userTracker.js" ]
+      "matches": ["https://www.adidas.co.il/*"],
+      "js": ["content.js"]
     }
   ]
 }

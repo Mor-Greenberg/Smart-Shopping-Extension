@@ -1,42 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Smart Shopping Assistant</title>
-  <link rel="stylesheet" href="styles.css" />
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h2>Smart Shopping Assistant</h2>
-
     <div class="card">
-      <p><strong>Product:</strong> <span id="productName">Loading...</span></p>
-      <p><strong>Brand:</strong> <span id="brandName">Loading...</span></p>
+        <h2>Price Comparison</h2>
+        
+        <div class="info-label">Detected SKU:</div>
+        <div id="productName" class="info-value">Searching...</div>
+        
+        <button id="searchBtn">Check Terminal X Price</button>
+        
+        <div id="resultsList"></div>
     </div>
-
-    <button id="searchBtn">Search Product</button>
-<button id="createAlertBtn">
-  Create product alert
-</button>
-
-<p id="alertStatus"></p>
-
-
-<div id="resultsList"></div>
-
-<div class="card">
-  <div id="recommendations">Loading recommendations...</div>
-</div>
-
-<hr />
-    <hr />
-   <div style="font-size: 10px; color: #999; word-break: break-all;">
-  <p><strong>Debug Hostname:</strong> <span id="debugHostname"></span></p>
-  <p><strong>Debug Brand:</strong> <span id="debugBrand"></span></p>
-  <p><strong>Debug Product:</strong> <span id="debugProduct"></span></p>
-</div>
-  </div>
-
-  <script src="dist/popup.js"></script>
+    <script src="popup.js"></script>
 </body>
 </html>
