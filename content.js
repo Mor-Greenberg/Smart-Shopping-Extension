@@ -1,26 +1,25 @@
-// content.js
+// בתוך content.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "GET_PRODUCT_DATA") {
-        let sku = null;
-
-        // שיטה משופרת: חילוץ מהחלק האחרון של הכתובת
-        const pathname = window.location.pathname; // מחזיר למשל /he/.../JQ2029.html
         
-        // ה-Regex הזה מחפש את התווים בין הסלאש האחרון לנקודה האחרונה
-        const urlMatch = pathname.match(/\/([^\/]+)\.html$/);
+        // 1. ניסיון לחלץ מה-URL (הכי אמין באדידס)
+        let sku = window.location.pathname.split('/').pop().replace('.html', '');
         
-        if (urlMatch && urlMatch[1]) {
-            sku = urlMatch[1].toUpperCase();
+        // 2. גיבוי: חיפוש בתגיות המטא של הדף
+        if (!sku || sku.length > 10) { 
+            const skuMeta = document.querySelector('meta[itemprop="sku"]') || 
+                           document.querySelector('meta[name="sku"]');
+            sku = skuMeta ? skuMeta.content : null;
         }
 
-        // גיבוי למקרה שה-URL לא מכיל .html
+        // 3. גיבוי אחרון: חיפוש אלמנט טקסטואלי שמכיל את המק"ט
         if (!sku) {
-            const parts = pathname.split('/');
-            const lastPart = parts[parts.length - 1];
-            sku = lastPart.replace('.html', '').toUpperCase();
+            const skuElement = document.querySelector('.gl-label--short') || 
+                             document.querySelector('[data-qa="product-number"]');
+            sku = skuElement ? skuElement.innerText.trim() : null;
         }
 
-        console.log("Extracted SKU:", sku);
+        console.log("Detected SKU:", sku);
         sendResponse({ sku: sku });
     }
     return true; 

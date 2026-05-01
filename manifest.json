@@ -1,16 +1,37 @@
 {
   "manifest_version": 3,
-  "name": "Adidas Price Checker",
-  "version": "1.0",
-  "permissions": ["activeTab", "scripting"],
-  "host_permissions": ["http://localhost:3000/*"],
+  "name": "Smart Shopping & Adidas Price Checker",
+  "version": "1.1",
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:3000/*"
+  ],
   "action": {
     "default_popup": "popup.html"
   },
-  "content_scripts": [
+  "background": {
+    "service_worker": "background.js"
+  },
+ "content_scripts": [
     {
-      "matches": ["https://www.adidas.co.il/*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://www.adidas.co.il/*",
+        "https://www.terminalx.com/*",
+        "https://www.nike.com/il/*",
+        "https://www.zara.com/il/*",
+        "https://www.asos.com/*"
+      ],
+      "js": [ "userTracker.js" ]
+    },
+    {
+      "matches": [ "https://www.adidas.co.il/*" ],
+      "js": [ "content.js" ]
     }
   ]
 }
