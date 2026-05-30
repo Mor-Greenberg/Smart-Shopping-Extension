@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const puppeteer = require('puppeteer-core');
 
-// --- חיבור למסד נתונים ---
+// DB connection
 const pool = new Pool({
   user: 'postgres',
   host: 'localhost',
@@ -25,6 +25,24 @@ pool.query('SELECT NOW()', (err, res) => {
 
 const app = express();
 const port = 3000;
+const ALLOWED_SHOPPING_HOSTS = [
+  'adidas.co.il',
+  'adidas.com',
+  'terminalx.com',
+  'nike.com',
+  'super-pharm.co.il'
+];
+
+function isAllowedShoppingUrl(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase().replace(/^www\./, '');
+    return ALLOWED_SHOPPING_HOSTS.some((allowedHost) => {
+      return hostname === allowedHost || hostname.endsWith(`.${allowedHost}`);
+    });
+  } catch (_err) {
+    return false;
+  }
+}
 
 // --- Middlewares ---
 app.use(cors());
@@ -138,6 +156,11 @@ app.post('/url_maker', async (req, res) => {
 
 app.post('/products/find-or-create', async (req, res) => {
   const { brand, product_name, source_url } = req.body;
+
+  if (!isAllowedShoppingUrl(source_url)) {
+    return res.status(400).json({ ok: false, error: 'Only shopping-site products can be saved' });
+  }
+
   try {
     let brandResult = await pool.query(`SELECT id FROM brands WHERE name = $1`, [brand]);
     let brandId;
@@ -156,6 +179,10 @@ app.post('/products/find-or-create', async (req, res) => {
     );
 
     if (productResult.rows.length > 0) {
+      await pool.query(
+        `UPDATE products SET source_url = $1 WHERE id = $2`,
+        [source_url, productResult.rows[0].id]
+      );
       return res.json({ product_id: productResult.rows[0].id });
     }
 
@@ -185,22 +212,77 @@ app.post('/products/:id/purchase', async (req, res) => {
 
 app.post('/event', async (req, res) => {
   const { user_id, product_id, event_type, duration_seconds, session_id } = req.body;
+  const activeDurationSeconds = Number(duration_seconds);
+
   try {
-    if (duration_seconds < 10) return res.status(200).send('Ignored (too short)');
+    if (!user_id || !product_id || !event_type || !session_id) {
+      return res.status(400).json({ ok: false, error: 'Missing event fields' });
+    }
+
+    if (!Number.isFinite(activeDurationSeconds) || activeDurationSeconds <= 0) {
+      return res.status(200).json({ ok: true, ignored: true, reason: 'No active duration to save' });
+    }
+
+    const activeDurationToAdd = Math.floor(activeDurationSeconds);
+
+    const productCheck = await pool.query(
+      `SELECT source_url FROM products WHERE id = $1`,
+      [product_id]
+    );
+
+    if (productCheck.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Product not found' });
+    }
+
+    if (!isAllowedShoppingUrl(productCheck.rows[0].source_url)) {
+      return res.status(400).json({ ok: false, error: 'Only shopping-site events can be saved' });
+    }
 
     await pool.query(`INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`, [user_id]);
-    await pool.query(
+
+    const updatedEvent = await pool.query(
+      `UPDATE user_events
+       SET duration_seconds = COALESCE(duration_seconds, 0) + $4,
+           session_id = $5,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = (
+         SELECT id
+         FROM user_events
+         WHERE user_id = $1 AND product_id = $2 AND event_type = $3
+         ORDER BY updated_at DESC NULLS LAST, id DESC
+         LIMIT 1
+       )
+       RETURNING id, duration_seconds`,
+      [user_id, product_id, event_type, activeDurationToAdd, session_id]
+    );
+
+    if (updatedEvent.rows.length > 0) {
+      return res.json({
+        ok: true,
+        updated_existing_event: true,
+        added_active_seconds: activeDurationToAdd,
+        total_active_seconds: updatedEvent.rows[0].duration_seconds
+      });
+    }
+
+    const insertedEvent = await pool.query(
       `INSERT INTO user_events (user_id, product_id, event_type, duration_seconds, session_id)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (session_id) DO UPDATE SET duration_seconds = EXCLUDED.duration_seconds`,
-      [user_id, product_id, event_type, duration_seconds, session_id]
+       RETURNING id, duration_seconds`,
+      [user_id, product_id, event_type, activeDurationToAdd, session_id]
     );
-    res.send('Event saved');
+
+    res.json({
+      ok: true,
+      updated_existing_event: false,
+      added_active_seconds: activeDurationToAdd,
+      total_active_seconds: insertedEvent.rows[0].duration_seconds
+    });
   } catch (err) {
-    res.status(500).send('Error saving event');
+    console.error('Error saving event:', err);
+    res.status(500).json({ ok: false, error: 'Error saving event' });
   }
 });
-
 app.get('/recommendations/:userId', async (req, res) => {
   const userId = req.params.userId;
   try {

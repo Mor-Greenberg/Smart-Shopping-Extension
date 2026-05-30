@@ -9,7 +9,15 @@
     "notifications"
   ],
   "host_permissions": [
-    "<all_urls>",
+    "https://www.adidas.co.il/*",
+    "https://adidas.co.il/*",
+    "https://www.adidas.com/*",
+    "https://adidas.com/*",
+    "https://www.terminalx.com/*",
+    "https://terminalx.com/*",
+    "https://www.nike.com/il/*",
+    "https://nike.com/il/*",
+    "https://*.super-pharm.co.il/*",
     "http://localhost:3000/*"
   ],
   "action": {
@@ -22,15 +30,24 @@
     {
       "matches": [
         "https://www.adidas.co.il/*",
+        "https://adidas.co.il/*",
+        "https://www.adidas.com/*",
+        "https://adidas.com/*",
         "https://www.terminalx.com/*",
+        "https://terminalx.com/*",
         "https://www.nike.com/il/*",
-        "https://www.zara.com/il/*",
-        "https://www.asos.com/*"
+        "https://nike.com/il/*",
+        "https://*.super-pharm.co.il/*"
       ],
       "js": [ "userTracker.js" ]
     },
     {
-      "matches": [ "https://www.adidas.co.il/*" ],
+      "matches": [
+        "https://www.adidas.co.il/*",
+        "https://adidas.co.il/*",
+        "https://www.adidas.com/*",
+        "https://adidas.com/*"
+      ],
       "js": [ "content.js" ]
     }
   ]

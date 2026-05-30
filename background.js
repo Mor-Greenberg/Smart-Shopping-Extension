@@ -11,8 +11,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       },
       body: JSON.stringify(message.payload)
     })
-      .then(res => res.json())
-      .then(data => sendResponse({ ok: true, data }))
+      .then(async (res) => {
+        const data = await res.json();
+        sendResponse({ ok: res.ok, data, error: res.ok ? undefined : data.error });
+      })
       .catch(error => sendResponse({ ok: false, error: error.message }));
 
     return true;
@@ -26,8 +28,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       },
       body: JSON.stringify(message.payload)
     })
-      .then(res => res.text())
-      .then(data => sendResponse({ ok: true, data }))
+      .then(async (res) => {
+        const data = await res.json();
+        sendResponse({ ok: res.ok, data, error: res.ok ? undefined : data.error });
+      })
       .catch(error => sendResponse({ ok: false, error: error.message }));
 
     return true;
