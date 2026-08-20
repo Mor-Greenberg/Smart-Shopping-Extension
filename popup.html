@@ -4,16 +4,31 @@
 <head>
     <meta charset="UTF-8">
     <title>Smart Shopping</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Local CSS only: remote font CSS in <head> can block paint and Chrome
+         may size/close the popup as empty before scripts run. -->
     <link rel="stylesheet" href="popup.css">
 </head>
 
 <body>
+    <script src="popup-show.js"></script>
     <canvas id="confettiCanvas" aria-hidden="true"></canvas>
 
     <button id="closePopupBtn" type="button" class="close-btn" aria-label="סגור חלון">&#10005;</button>
+
+    <button id="personalAreaBtn" type="button" class="btn-personal" aria-label="איזור אישי" title="איזור אישי">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="8" r="4"></circle>
+            <path d="M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6"></path>
+        </svg>
+        <span id="personalAreaCount" class="btn-personal__count" hidden>0</span>
+    </button>
+
+    <button id="adminDashboardBtn" type="button" class="btn-admin" aria-label="ניהול מערכת" title="ניהול מערכת" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+    </button>
 
     <header class="app-header">
         <div class="app-header__glow" aria-hidden="true"></div>
@@ -30,6 +45,8 @@
         <div class="product-hero__content">
             <span class="product-hero__label">Product:</span>
             <p id="productName" class="product-hero__name">Loading...</p>
+
+            <div id="heroClubs" class="club-strip club-strip--hero" hidden></div>
 
             <div class="product-hero__ean">
                 <span class="product-hero__ean-label">EAN:</span>
@@ -54,6 +71,11 @@
             <h2 class="card__title">התראות מחיר</h2>
             <p class="card__description">קבלו עדכון כשהמחיר יורד באתרים שאתם עוקבים אחריהם</p>
 
+            <button id="viewAlertsBtn" type="button" class="drop-link" hidden>
+                <span class="drop-link__text">צפייה בירידות מחיר</span>
+                <span id="viewAlertsCount" class="drop-link__count">0</span>
+            </button>
+
             <div class="track-action">
                 <button id="createAlertBtn" type="button" class="btn-track">Create Product Alert</button>
                 <div id="alertStatus" class="track-status" role="status"></div>
@@ -62,6 +84,7 @@
     </main>
 
     <script src="config.js"></script>
+    <script src="auth.js"></script>
     <script src="popup.js"></script>
 </body>
 

@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node server.js",
     "start:scraper": "node services/scraper.js",
+    "start:all": "node scripts/dev.js",
     "dev": "nodemon server.js",
     "migrate": "node scripts/migrate.js",
     "test:price-drop": "node scripts/test-price-drop.js"

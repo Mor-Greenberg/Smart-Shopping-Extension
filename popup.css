@@ -25,8 +25,22 @@
     box-sizing: border-box;
 }
 
+/* Class-level display rules outrank the UA sheet, so the hidden attribute
+   needs to win explicitly. */
+[hidden] {
+    display: none !important;
+}
+
+html {
+    width: 400px;
+    /* Keep a non-zero shell so Chrome does not open a 0-height popup. */
+    min-height: 160px;
+}
+
 body {
     width: 400px;
+    max-width: 400px;
+    min-height: 160px;
     margin: 0;
     padding: 0;
     font-family: var(--font-hebrew);
@@ -51,7 +65,8 @@ body {
 .close-btn {
     position: absolute;
     top: 12px;
-    left: 12px;
+    right: 12px;
+    left: auto;
     z-index: 110;
     width: 30px;
     height: 30px;
@@ -80,11 +95,111 @@ body {
     outline-offset: 2px;
 }
 
+.btn-personal {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: auto;
+    z-index: 110;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    color: var(--purple-deep);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 2px 10px rgba(69, 6, 147, 0.15);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.btn-personal svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.btn-personal:hover {
+    color: var(--white);
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+    transform: scale(1.05);
+}
+
+.btn-personal:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+}
+
+.btn-personal__count {
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-family: system-ui, -apple-system, Arial, sans-serif;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 16px;
+    color: var(--white);
+    background: var(--pink);
+}
+
+.btn-admin {
+    position: absolute;
+    top: 12px;
+    /* Sits beside the personal-area button, which owns the 12px slot. */
+    left: 50px;
+    right: auto;
+    z-index: 110;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #ff4f1a;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(255, 79, 26, 0.35);
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.btn-admin svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.btn-admin:hover {
+    background: #e03e0f;
+    transform: scale(1.05);
+}
+
+.btn-admin:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+}
+
 /* ── Header ── */
 
 .app-header {
     position: relative;
-    padding: 20px 48px 14px 22px;
+    padding: 20px 48px 14px 92px;
     background: linear-gradient(135deg, var(--white) 0%, #faf8ff 100%);
     overflow: hidden;
 }
@@ -352,6 +467,79 @@ body {
     border-radius: 20px;
 }
 
+/* ── Consumer club badges ── */
+
+@keyframes club-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+.club-strip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    vertical-align: middle;
+}
+
+.club-strip--deal {
+    margin-inline-start: 8px;
+}
+
+.club-strip--hero {
+    display: flex;
+    margin: 2px 0 10px;
+}
+
+.club-strip__label {
+    font-family: system-ui, -apple-system, Arial, sans-serif;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--label);
+    margin-inline-end: 2px;
+}
+
+.club-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex: none;
+    font-family: system-ui, -apple-system, Arial, sans-serif;
+    font-size: 0.55rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--purple-deep);
+    background: var(--white);
+    box-shadow: 0 2px 6px rgba(69, 6, 147, 0.22);
+    animation: club-float 3s ease-in-out infinite;
+}
+
+.club-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Staggered so the row drifts instead of bobbing in unison. */
+.club-badge:nth-child(2) { animation-delay: 0.35s; }
+.club-badge:nth-child(3) { animation-delay: 0.7s; }
+.club-badge:nth-child(4) { animation-delay: 1.05s; }
+.club-badge:nth-child(5) { animation-delay: 1.4s; }
+
+.club-strip--hero .club-badge {
+    width: 23px;
+    height: 23px;
+    background: linear-gradient(145deg, #f6efff, #ffe9f3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .club-badge { animation: none; }
+}
+
 @keyframes pulse-best-deal {
     0%, 100% {
         box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.55);
@@ -364,6 +552,81 @@ body {
 }
 
 /* ── Tracking section ── */
+
+.drop-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 11px 14px;
+    /* Neutral until a price actually dropped; .drop-link--hot turns it green. */
+    border: 1px solid rgba(140, 0, 255, 0.16);
+    border-radius: var(--radius-sm);
+    background: rgba(140, 0, 255, 0.05);
+    font-family: var(--font-hebrew);
+    text-align: right;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.drop-link:hover {
+    background: rgba(140, 0, 255, 0.1);
+    border-color: rgba(140, 0, 255, 0.32);
+}
+
+.drop-link:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+}
+
+.drop-link__text {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--purple-deep);
+}
+
+@keyframes drop-link-pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.4);
+    }
+    50% {
+        transform: scale(1.015);
+        box-shadow: 0 0 0 7px rgba(18, 183, 106, 0);
+    }
+}
+
+.drop-link--hot {
+    border-color: rgba(18, 183, 106, 0.4);
+    background: rgba(18, 183, 106, 0.08);
+    animation: drop-link-pulse 2.4s ease-in-out infinite;
+}
+
+.drop-link--hot:hover {
+    background: rgba(18, 183, 106, 0.15);
+    border-color: var(--deal-green);
+}
+
+.drop-link--hot .drop-link__text {
+    color: var(--deal-green-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drop-link--hot { animation: none; }
+}
+
+.drop-link__count {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--white);
+    text-align: center;
+    background: var(--deal-green);
+}
 
 .track-action {
     display: flex;

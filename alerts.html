@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>איזור אישי — Smart Shopping</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="alerts.css">
+</head>
+
+<body>
+    <script src="popup-show.js"></script>
+    <button id="backBtn" type="button" class="close-btn" aria-label="חזרה למסך הראשי">&#8594;</button>
+
+    <header class="app-header">
+        <div class="app-header__glow" aria-hidden="true"></div>
+        <h1 class="app-header__title">איזור אישי</h1>
+        <p class="app-header__subtitle">הפרטים שלך והמוצרים שבמעקב</p>
+    </header>
+
+    <main class="app-main">
+        <section class="card card--profile">
+            <h2 class="card__title">הפרטים שלי</h2>
+
+            <div class="profile-field">
+                <span class="profile-field__label">אימייל</span>
+                <span id="profileEmail" class="profile-field__value">—</span>
+            </div>
+
+            <div class="profile-field">
+                <span class="profile-field__label">מועדוני צרכנות</span>
+                <div id="profileClubs" class="club-chips"></div>
+            </div>
+
+            <div class="club-add">
+                <select id="clubSelect" class="club-add__select" aria-label="בחירת מועדון להוספה">
+                    <option value="">טוען מועדונים...</option>
+                </select>
+                <button id="clubAddBtn" type="button" class="club-add__btn" disabled>הוספה</button>
+            </div>
+
+            <p id="profileStatus" class="profile-status" role="status"></p>
+        </section>
+
+        <section class="card card--drops">
+            <h2 class="card__title">המוצרים שבמעקב</h2>
+            <p id="alertsSummary" class="alerts-summary" hidden></p>
+            <p id="alertsState" class="alerts-state">טוען את רשימת המעקב...</p>
+            <div id="alertsList" class="alerts-list"></div>
+        </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="alerts.js"></script>
+    <script src="profile.js"></script>
+</body>
+
+</html>

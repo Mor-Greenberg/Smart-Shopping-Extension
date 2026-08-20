@@ -1,10 +1,101 @@
 // popup.js
 
+// Do not wait for DOMContentLoaded — a hidden body is sized as 0px by Chrome.
+if (document.body) document.body.hidden = false;
+
 const API_BASE = 'http://localhost:3000';
 
 const CONFETTI_COLORS = ['#450693', '#8C00FF', '#FF3F7F', '#FFC400', '#12b76a', '#ffffff'];
 let confettiFired = false;
 let currentSitePrice = null;
+
+// Which consumer clubs each retail site honours, as configured by the admin.
+let siteClubsMap = {};
+// The clubs this user actually belongs to — badges are personal, not the full site list.
+let myClubNames = new Set();
+
+function clubNameKey(name) {
+    return String(name || '').trim().toLowerCase();
+}
+
+/**
+ * Kept in storage so the badges still render when the server is unreachable.
+ * The request starts as soon as the popup script loads and is awaited later.
+ */
+const siteClubsReady = (async () => {
+    try {
+        const cached = await chrome.storage.local.get(['siteClubsCache', 'userProfile']);
+        if (cached?.siteClubsCache) siteClubsMap = cached.siteClubsCache;
+        if (Array.isArray(cached?.userProfile?.consumerClubs)) {
+            myClubNames = new Set(cached.userProfile.consumerClubs.map(clubNameKey));
+        }
+    } catch (_) { /* first run */ }
+
+    try {
+        const res = await fetch(`${API_BASE}/api/site-clubs`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && typeof data.siteClubs === 'object') {
+            siteClubsMap = data.siteClubs;
+            try {
+                // Callback form: .set() may not return a Promise in all Chrome builds.
+                chrome.storage.local.set({ siteClubsCache: siteClubsMap }, () => {
+                    void chrome.runtime?.lastError;
+                });
+            } catch (_) { /* storage write is optional */ }
+        }
+    } catch (_) { /* offline: cached map stays in place */ }
+})();
+
+function clubsForSite(siteKey) {
+    if (!siteKey) return [];
+    const variants = [
+        siteKey,
+        siteKey.replace(/^www\./, ''),
+        siteKey.startsWith('www.') ? siteKey : `www.${siteKey}`
+    ];
+    let siteClubs = [];
+    for (const key of variants) {
+        if (Array.isArray(siteClubsMap[key]) && siteClubsMap[key].length) {
+            siteClubs = siteClubsMap[key];
+            break;
+        }
+    }
+    if (!siteClubs.length || !myClubNames.size) return [];
+    return siteClubs.filter((club) => myClubNames.has(clubNameKey(club.name)));
+}
+
+function createClubStrip(siteKey, variant = 'deal') {
+    const clubs = clubsForSite(siteKey);
+    if (!clubs.length) return null;
+
+    const strip = document.createElement('span');
+    strip.className = `club-strip club-strip--${variant}`;
+
+    clubs.slice(0, 5).forEach((club) => {
+        const badge = document.createElement('span');
+        badge.className = 'club-badge';
+        badge.title = `מועדון ${club.name}`;
+
+        if (club.logoUrl) {
+            const img = document.createElement('img');
+            img.src = club.logoUrl;
+            img.alt = club.name;
+            // Fall back to initials rather than leaving an empty circle.
+            img.onerror = () => {
+                img.remove();
+                badge.textContent = club.initials || club.name.slice(0, 2);
+            };
+            badge.appendChild(img);
+        } else {
+            badge.textContent = club.initials || club.name.slice(0, 2);
+        }
+
+        strip.appendChild(badge);
+    });
+
+    return strip;
+}
 
 function sanitizePrice(value) {
     if (value == null || value === '') return null;
@@ -43,8 +134,84 @@ function formatDisplayPrice(price) {
     return val % 1 === 0 ? String(val) : val.toFixed(2);
 }
 
+async function refreshAdminFlag(profile) {
+    if (!profile?.installationId || typeof saveUserProfile !== 'function') return profile;
+    try {
+        const res = await fetch(
+            `${API_BASE}/api/users/status?installationId=${encodeURIComponent(profile.installationId)}`
+        );
+        const data = await res.json();
+        if (data.user) {
+            await saveUserProfile(data.user, profile.installationId);
+            return {
+                ...profile,
+                isAdmin: Boolean(data.user.isAdmin),
+                userId: data.user.id,
+                email: data.user.email
+            };
+        }
+    } catch (_) {}
+    return profile;
+}
+
+const STALE_RETRY_DELAYS_MS = [400, 800, 1200];
+
+function requestProductData(tabId) {
+    return new Promise((resolve) => {
+        chrome.tabs.sendMessage(tabId, { action: 'GET_PRODUCT_DATA' }, (response) => {
+            resolve(chrome.runtime.lastError ? null : (response || null));
+        });
+    });
+}
+
+/**
+ * A soft navigation can leave the previous product in the DOM for a moment, so
+ * the content script flags that case and we wait for the page to catch up.
+ */
+async function getFreshProductData(tabId) {
+    let response = await requestProductData(tabId);
+
+    for (const delay of STALE_RETRY_DELAYS_MS) {
+        if (!response?.stale) break;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        response = await requestProductData(tabId);
+    }
+
+    return response;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+    document.body.hidden = false;
+    document.documentElement.style.width = '400px';
+    document.body.style.width = '400px';
+
+    try {
+        if (!(await ensureRegistered())) return;
+    } catch (err) {
+        console.warn('[Auth] Registration check failed:', err?.message || err);
+        redirectToRegistration();
+        return;
+    }
     document.getElementById('closePopupBtn')?.addEventListener('click', () => window.close());
+    document.getElementById('personalAreaBtn')?.addEventListener('click', () => {
+        location.replace('alerts.html');
+    });
+
+    const profile = await refreshAdminFlag(await getStoredUserProfile());
+    const adminBtn = document.getElementById('adminDashboardBtn');
+    if (profile?.isAdmin && adminBtn) {
+        adminBtn.hidden = false;
+        adminBtn.addEventListener('click', () => {
+            location.replace(chrome.runtime.getURL('admin-dashboard.html'));
+        });
+    } else if (adminBtn) {
+        adminBtn.hidden = true;
+    }
+
+    // Independent of the current tab: drops should show even on an unsupported page.
+    getOrCreateInstallationId()
+        .then(loadPriceDrops)
+        .catch(() => {});
 
     const container = document.getElementById('dynamicButtonsContainer');
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -71,52 +238,73 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    chrome.tabs.sendMessage(tab.id, { action: 'GET_PRODUCT_DATA' }, async (response) => {
-        if (chrome.runtime.lastError || !response) {
-            container.innerHTML = '<div class="info-text">לא ניתן לקרוא נתונים מהדף</div>';
-            return;
-        }
+    await siteClubsReady;
+    renderHeroClubs(currentHostname);
 
-        currentSitePrice = sanitizePrice(response.price);
+    const response = await getFreshProductData(tab.id);
 
-        if (!response.ean || response.ean === 'unknown_sku') {
-            const noEanMsg = siteConfig?.noEanMessage || 'לא נמצא ברקוד במוצר';
-            container.innerHTML = `<div class="info-text">${noEanMsg}</div>`;
-            updateProductInfo(response);
-            return;
-        }
+    if (!response) {
+        container.innerHTML = '<div class="info-text">לא ניתן לקרוא נתונים מהדף</div>';
+        return;
+    }
 
+    // Comparing the wrong product is worse than showing nothing.
+    if (response.stale) {
+        container.innerHTML =
+            '<div class="info-text">הדף עדיין מציג את המוצר הקודם. רעננו את הדף ונסו שוב</div>';
+        return;
+    }
+
+    currentSitePrice = sanitizePrice(response.price);
+
+    if (!response.ean || response.ean === 'unknown_sku') {
+        const noEanMsg = siteConfig?.noEanMessage || 'לא נמצא ברקוד במוצר';
+        container.innerHTML = `<div class="info-text">${noEanMsg}</div>`;
         updateProductInfo(response);
-        setupActiveTracking(response, currentHostname, tab.url);
+        return;
+    }
 
-        const currentKeys = new Set([
-            currentHostname,
-            currentHostname.replace(/^www\./, ''),
-            currentHostname.startsWith('www.') ? currentHostname : `www.${currentHostname}`
-        ]);
+    updateProductInfo(response);
+    setupActiveTracking(response, canonicalSiteKey(currentHostname), response.url || tab.url).catch(() => {});
 
-        const targetSites = Object.keys(SITES_CONFIG).filter(site => {
-            const cfg = SITES_CONFIG[site];
-            if (typeof isSiteEnabled === 'function' && !isSiteEnabled(cfg)) return false;
-            if (cfg.enabled === false) return false;
-            if (currentKeys.has(site)) return false;
-            if (cfg.siteType !== 'retail') return false;
-            if (cfg.compareRole === 'origin-only') return false;
-            return true;
-        });
+    const currentKeys = new Set([
+        currentHostname,
+        currentHostname.replace(/^www\./, ''),
+        currentHostname.startsWith('www.') ? currentHostname : `www.${currentHostname}`
+    ]);
 
-        if (targetSites.length === 0) {
-            container.innerHTML = '<div class="info-text">אין אתרים נוספים להשוואה</div>';
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="loading-state">
-                <span class="loading-state__dot"></span>
-                <span class="loading-state__text">בודק זמינות באתרים אחרים...</span>
-            </div>`;
-        await buildComparisonButtons(response.ean, response.productName, targetSites, container);
+    const targetSites = Object.keys(SITES_CONFIG).filter(site => {
+        const cfg = SITES_CONFIG[site];
+        if (typeof isSiteEnabled === 'function' && !isSiteEnabled(cfg)) return false;
+        if (cfg.enabled === false) return false;
+        if (currentKeys.has(site)) return false;
+        if (cfg.siteType !== 'retail') return false;
+        if (cfg.compareRole === 'origin-only') return false;
+        return true;
     });
+
+    if (targetSites.length === 0) {
+        container.innerHTML = '<div class="info-text">אין אתרים נוספים להשוואה</div>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="loading-state">
+            <span class="loading-state__dot"></span>
+            <span class="loading-state__text">בודק זמינות באתרים אחרים...</span>
+        </div>`;
+
+    await buildComparisonButtons(
+        response.ean,
+        response.productName,
+        targetSites,
+        container,
+        {
+            sourceSite: canonicalSiteKey(currentHostname),
+            sourcePrice: currentSitePrice,
+            sourceUrl: response.url || tab.url
+        }
+    );
 });
 
 /**
@@ -131,6 +319,25 @@ function fixMixedScriptSpacing(text) {
         .replace(/([A-Za-z0-9])([\u0590-\u05FF])/g, '$1 $2')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function renderHeroClubs(siteKey) {
+    const host = document.getElementById('heroClubs');
+    if (!host) return;
+
+    host.replaceChildren();
+    const strip = createClubStrip(siteKey, 'hero');
+    if (!strip) {
+        host.hidden = true;
+        return;
+    }
+
+    const label = document.createElement('span');
+    label.className = 'club-strip__label';
+    label.textContent = 'מועדונים:';
+    host.appendChild(label);
+    while (strip.firstChild) host.appendChild(strip.firstChild);
+    host.hidden = false;
 }
 
 function updateProductInfo(data) {
@@ -162,25 +369,6 @@ function updateProductInfo(data) {
     }
 }
 
-function getOrCreateInstallationId() {
-    return new Promise((resolve) => {
-        chrome.storage.local.get(['installation_id', 'user_id'], (result) => {
-            if (result.installation_id) {
-                resolve(result.installation_id);
-                return;
-            }
-            if (result.user_id) {
-                chrome.storage.local.set({ installation_id: result.user_id }, () => {
-                    resolve(result.user_id);
-                });
-                return;
-            }
-            const newId = crypto.randomUUID();
-            chrome.storage.local.set({ installation_id: newId }, () => resolve(newId));
-        });
-    });
-}
-
 function sendBackgroundMessage(message) {
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage(message, (response) => {
@@ -195,6 +383,69 @@ function sendBackgroundMessage(message) {
             resolve(response.data);
         });
     });
+}
+
+/**
+ * The popup only advertises how many drops are waiting; the cards themselves
+ * live on the dedicated alerts page.
+ */
+async function loadPriceDrops(installationId) {
+    const button = document.getElementById('viewAlertsBtn');
+    const counter = document.getElementById('viewAlertsCount');
+    const headerCount = document.getElementById('personalAreaCount');
+    if (!installationId || !button) return;
+
+    try {
+        const data = await sendBackgroundMessage({
+            type: 'GET_ALERTS',
+            payload: { installation_id: installationId }
+        });
+
+        const items = data?.items || [];
+        const dropped = Number(data?.droppedCount) || 0;
+
+        if (!items.length) {
+            button.hidden = true;
+            if (counter) counter.hidden = true;
+            if (headerCount) headerCount.hidden = true;
+            return;
+        }
+
+        // A number is a price-drop alert, so it stays off while nothing dropped.
+        if (counter) {
+            counter.textContent = String(dropped);
+            counter.hidden = dropped === 0;
+        }
+        if (headerCount) {
+            headerCount.textContent = String(dropped);
+            headerCount.hidden = dropped === 0;
+        }
+
+        const label = button.querySelector('.drop-link__text');
+        if (label) {
+            label.textContent = dropped > 0
+                ? 'צפייה בירידות מחיר'
+                : `המוצרים שבמעקב (${items.length})`;
+        }
+        button.classList.toggle('drop-link--hot', dropped > 0);
+
+        button.hidden = false;
+        button.addEventListener('click', () => {
+            location.replace('alerts.html');
+        });
+    } catch (_) {
+        // Server offline — the alerts card just stays empty
+    }
+}
+
+function canonicalSiteKey(hostname) {
+    if (typeof resolveSiteEntry === 'function') {
+        return resolveSiteEntry(hostname)?.key || hostname;
+    }
+    if (typeof SITES_CONFIG !== 'undefined' && SITES_CONFIG[hostname]) return hostname;
+    const withoutWww = String(hostname || '').replace(/^www\./, '');
+    if (typeof SITES_CONFIG !== 'undefined' && SITES_CONFIG[withoutWww]) return withoutWww;
+    return hostname;
 }
 
 async function setupActiveTracking(productData, sourceSite, sourceUrl) {
@@ -247,6 +498,25 @@ async function setupActiveTracking(productData, sourceSite, sourceUrl) {
                 }
             });
 
+            // Watchlist row that powers the alerts page.
+            const priceToSave = currentSitePrice || sanitizePrice(productData.price);
+            if (!(priceToSave > 0)) {
+                throw new Error('לא נמצא מחיר לשמירה מהדף');
+            }
+
+            await sendBackgroundMessage({
+                type: 'SAVE_ALERT',
+                payload: {
+                    userId: installationId,
+                    url: sourceUrl,
+                    name: productData.productName,
+                    image: productData.imageUrl,
+                    originalPrice: priceToSave,
+                    ean: productData.ean,
+                    siteKey: sourceSite
+                }
+            });
+
             alertBtn.textContent = 'מעקב פעיל';
             if (alertStatus) {
                 alertStatus.textContent = 'המוצר נשמר למעקב';
@@ -255,7 +525,7 @@ async function setupActiveTracking(productData, sourceSite, sourceUrl) {
         } catch (err) {
             alertBtn.disabled = false;
             if (alertStatus) {
-                alertStatus.textContent = 'שגיאה בשמירה למעקב';
+                alertStatus.textContent = err.message || 'שגיאה בשמירה למעקב';
                 alertStatus.className = 'alert-status alert-status--error';
             }
             console.error('Active track failed:', err);
@@ -287,8 +557,12 @@ function createPriceButton(site, price, productUrl, isBestDeal = false) {
     btn.className = isBestDeal ? 'deal-btn deal-btn--best' : 'deal-btn deal-btn--primary';
 
     const label = document.createElement('span');
-    label.textContent = `${SITES_CONFIG[site].displayName}: ₪${price}`;
+    const siteName = SITES_CONFIG[site]?.displayName || site;
+    label.textContent = `${siteName}: ₪${price}`;
     btn.appendChild(label);
+
+    const clubs = createClubStrip(site, 'deal');
+    if (clubs) btn.appendChild(clubs);
 
     if (isBestDeal) {
         const badge = document.createElement('span');
@@ -307,7 +581,14 @@ function createFallbackButton(site, productUrl) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'deal-btn deal-btn--outline';
-    btn.textContent = `צפה ב-${SITES_CONFIG[site].displayName}`;
+
+    const label = document.createElement('span');
+    label.textContent = `צפה ב-${SITES_CONFIG[site]?.displayName || site}`;
+    btn.appendChild(label);
+
+    const clubs = createClubStrip(site, 'deal');
+    if (clubs) btn.appendChild(clubs);
+
     btn.addEventListener('click', () => {
         chrome.tabs.create({ url: productUrl });
     });
@@ -480,6 +761,16 @@ function appendDealButtons(container, results, loadingEl) {
     maybeCelebrateCheaperDeal(results);
 }
 
+function getCompareNotFoundMessage() {
+    return (typeof COMPARE_UI_CONFIG !== 'undefined' && COMPARE_UI_CONFIG.notFoundMessage)
+        || 'המוצר לא נמצא באתרים אחרים';
+}
+
+function getCompareSearchTimeoutMs() {
+    const configured = typeof COMPARE_UI_CONFIG !== 'undefined' && COMPARE_UI_CONFIG.searchTimeoutMs;
+    return Number.isFinite(configured) && configured > 0 ? configured : 30000;
+}
+
 function renderComparisonResults(container, results) {
     container.innerHTML = '';
 
@@ -487,7 +778,7 @@ function renderComparisonResults(container, results) {
     const withoutPrice = results.filter(r => !r.price || r.price <= 0);
 
     if (withPrice.length === 0 && withoutPrice.length === 0) {
-        container.innerHTML = '<div class="info-text">לא נמצא במותגים אחרים</div>';
+        container.innerHTML = `<div class="info-text">${getCompareNotFoundMessage()}</div>`;
         return;
     }
 
@@ -507,18 +798,75 @@ function updatePendingLoading(container, pendingCount, loadingEl) {
     }
 }
 
-async function buildComparisonButtons(ean, sourceProductName, targetSites, container) {
+function persistOriginOffer({ ean, siteKey, productUrl, price, productName }) {
+    if (!ean || !siteKey || !productUrl) return;
+    fetch(`${API_BASE}/api/offers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ean, siteKey, productUrl, price, productName })
+    }).catch(() => {});
+}
+
+async function buildComparisonButtons(ean, sourceProductName, targetSites, container, sourceMeta = {}) {
+    persistOriginOffer({
+        ean,
+        siteKey: sourceMeta.sourceSite,
+        productUrl: sourceMeta.sourceUrl,
+        price: sourceMeta.sourcePrice,
+        productName: sourceProductName
+    });
+
     const sitesSettings = {};
     for (const site of targetSites) {
         sitesSettings[site] = SITES_CONFIG[site];
     }
 
+    let installationId = null;
+    try {
+        installationId = await getOrCreateInstallationId();
+    } catch (_) { /* analytics is optional */ }
+
     const results = [];
     let pendingLiveCount = targetSites.length;
     const loadingEl = createGenericLoadingMessage();
+    const timeoutMs = getCompareSearchTimeoutMs();
+    const abortController = new AbortController();
+    let finished = false;
+    let timeoutHandle = null;
+
+    const applyEntry = (entry) => {
+        if (!entry || finished) return;
+        const existing = results.findIndex((row) => row.site === entry.site);
+        if (existing >= 0) results[existing] = entry;
+        else results.push(entry);
+        appendDealButtons(container, results, loadingEl);
+    };
+
+    const finishCompare = (reason = 'complete') => {
+        if (finished) return;
+        finished = true;
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+
+        updatePendingLoading(container, 0, loadingEl);
+
+        if (results.length === 0) {
+            if (reason === 'timeout') {
+                console.log('[Smart Shopping] Compare search TIMEOUT', { ean, timeoutMs });
+            }
+            container.innerHTML = `<div class="info-text">${getCompareNotFoundMessage()}</div>`;
+            return;
+        }
+
+        appendDealButtons(container, results, null);
+    };
 
     container.innerHTML = '';
     container.appendChild(loadingEl);
+
+    timeoutHandle = setTimeout(() => {
+        abortController.abort();
+        finishCompare('timeout');
+    }, timeoutMs);
 
     try {
         const response = await fetch(`${API_BASE}/api/compare-stream`, {
@@ -531,8 +879,13 @@ async function buildComparisonButtons(ean, sourceProductName, targetSites, conta
                 ean,
                 compareWith: targetSites,
                 sourceProductName,
-                sitesSettings
-            })
+                sitesSettings,
+                sourceSite: sourceMeta.sourceSite || null,
+                sourcePrice: sourceMeta.sourcePrice ?? null,
+                sourceUrl: sourceMeta.sourceUrl || null,
+                installationId
+            }),
+            signal: abortController.signal
         });
 
         if (!response.ok || !response.body) {
@@ -548,20 +901,13 @@ async function buildComparisonButtons(ean, sourceProductName, targetSites, conta
             if (done) break;
 
             for (const evt of parser.feed(decoder.decode(value, { stream: true }))) {
+                if (finished) break;
+
                 if (evt.event === 'progress' && evt.data?.pending != null) {
                     pendingLiveCount = evt.data.pending;
                     updatePendingLoading(container, pendingLiveCount, loadingEl);
                 } else if (evt.event === 'result' && evt.data?.site) {
-                    const entry = streamResultToEntry(evt.data);
-                    if (entry) {
-                        const existing = results.findIndex(r => r.site === entry.site);
-                        if (existing >= 0) {
-                            results[existing] = entry;
-                        } else {
-                            results.push(entry);
-                        }
-                        appendDealButtons(container, results, loadingEl);
-                    }
+                    applyEntry(streamResultToEntry(evt.data));
                     if (!evt.data.fromCache) {
                         pendingLiveCount = Math.max(0, pendingLiveCount - 1);
                         updatePendingLoading(container, pendingLiveCount, loadingEl);
@@ -571,16 +917,28 @@ async function buildComparisonButtons(ean, sourceProductName, targetSites, conta
                     updatePendingLoading(container, pendingLiveCount, loadingEl);
                 } else if (evt.event === 'done') {
                     pendingLiveCount = 0;
-                    updatePendingLoading(container, 0, loadingEl);
+                    updatePendingLoading(container, pendingLiveCount, loadingEl);
                 }
             }
+
+            if (finished) break;
         }
 
-        if (results.length === 0) {
-            renderComparisonResults(container, results);
+        if (!finished) {
+            finishCompare('complete');
         }
     } catch (err) {
-        console.error('Compare stream failed:', err);
+        if (err.name === 'AbortError') {
+            if (!finished) finishCompare('timeout');
+            return;
+        }
+
+        console.warn('Compare stream failed:', err?.message || err);
+        if (results.length) {
+            if (!finished) finishCompare('complete');
+            return;
+        }
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         container.innerHTML = '<div class="info-text">שגיאה בחיבור לשרת</div>';
     }
 }

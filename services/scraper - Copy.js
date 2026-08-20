@@ -1,6 +1,8 @@
 const express = require('express');
 const puppeteer = require('puppeteer-core');
 const { Cluster } = require('puppeteer-cluster');
+const { scrapeKspByApi } = require('./kspApiScraper');
+
 const app = express();
 app.use(express.json());
 
@@ -227,6 +229,7 @@ function resolveScrapeConfig(siteSettings) {
         extraHeaders: { ...DEFAULT_SCRAPE.extraHeaders, ...(scrape.extraHeaders || {}) },
         maxPrice: scrape.maxPrice ?? DEFAULT_SCRAPE.maxPrice,
         searchPageHints: scrape.searchPageHints || DEFAULT_SCRAPE.searchPageHints,
+        api: scrape.api || null,
         priceExtraction,
         navigation,
         productNameVerification: {
@@ -1587,8 +1590,36 @@ async function executeScrape(targetSite, ean, siteSettings, sourceProductName = 
         ean,
         sourceProductName: sourceProductName || null,
         nameVerification: scrapeConfig.productNameVerification?.enabled || false,
-        strategies: scrapeConfig.priceExtraction.map(s => s.type)
+        strategies: scrapeConfig.priceExtraction.map(s => s.type),
+        api: scrapeConfig.api?.type || null
     });
+
+    if (scrapeConfig.api?.type === 'ksp') {
+        try {
+            const apiResult = await scrapeKspByApi(ean, sourceProductName);
+            log(apiResult.exists ? 'INFO' : 'WARN', 'KSP API scrape finished', {
+                site: targetSite,
+                ean,
+                exists: apiResult.exists,
+                price: apiResult.price,
+                productUrl: apiResult.productUrl
+            });
+            return apiResult;
+        } catch (err) {
+            log('WARN', 'KSP API scrape failed — not falling back to a blocked browser', {
+                ean,
+                error: err.message,
+                status: err.status || null
+            });
+            return {
+                exists: false,
+                price: null,
+                productUrl: null,
+                error: err.message || 'KSP API failed',
+                code: err.status ? `HTTP_${err.status}` : 'KSP_API_ERROR'
+            };
+        }
+    }
 
     try {
         const cluster = await initCluster();

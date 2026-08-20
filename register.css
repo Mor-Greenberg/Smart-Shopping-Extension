@@ -1,0 +1,238 @@
+:root {
+    --purple-deep: #450693;
+    --violet: #8C00FF;
+    --pink: #FF3F7F;
+    --text: #1a1033;
+    --text-muted: #6b6280;
+    --border: rgba(69, 6, 147, 0.15);
+    --error: #b42318;
+    --error-bg: #fef3f2;
+    --radius: 16px;
+    --font-hebrew: 'Assistant', system-ui, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    width: 400px;
+    min-height: 520px;
+    font-family: var(--font-hebrew);
+    background: linear-gradient(160deg, #f8f4ff 0%, #fff 45%, #fff5fa 100%);
+    color: var(--text);
+}
+
+.register-page {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 20px 16px 28px;
+}
+
+.register-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.register-header h1 {
+    margin: 0 0 8px;
+    font-size: 1.75rem;
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.register-header p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.register-form {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(69, 6, 147, 0.08);
+}
+
+.field {
+    margin-bottom: 18px;
+    border: none;
+    padding: 0;
+}
+
+.field label,
+.field legend {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.field-hint {
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field select,
+.field textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    background: #fff;
+    color: var(--text);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    outline: 2px solid rgba(140, 0, 255, 0.35);
+    border-color: var(--violet);
+}
+
+.field input.input--invalid {
+    border-color: var(--error);
+    background: var(--error-bg);
+}
+
+.field input.input--invalid:focus {
+    outline-color: rgba(180, 35, 24, 0.35);
+}
+
+.field-error {
+    margin: 8px 0 0;
+    color: var(--error);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.club-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.club-toggle {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 12px 8px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: center;
+    background: #fff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.club-toggle:hover {
+    border-color: rgba(140, 0, 255, 0.4);
+}
+
+.club-toggle__input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.club-toggle__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #f3e8ff, #ffe4f0);
+    color: var(--purple-deep);
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+}
+
+.club-toggle__logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.club-toggle__name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.club-toggle:has(.club-toggle__input:checked) {
+    border-color: var(--violet);
+    background: #faf5ff;
+    box-shadow: 0 0 0 3px rgba(140, 0, 255, 0.12);
+}
+
+.club-toggle:has(.club-toggle__input:checked) .club-toggle__logo {
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+    color: #fff;
+}
+
+.club-toggle:has(.club-toggle__input:focus-visible) {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+}
+
+.dynamic-question {
+    margin-bottom: 16px;
+}
+
+.dynamic-question label .required-mark {
+    color: var(--pink);
+}
+
+.btn-primary {
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.form-error {
+    color: var(--error);
+    font-size: 0.9rem;
+    margin: 0 0 12px;
+}
+
+.success-message {
+    margin-top: 20px;
+    padding: 16px;
+    text-align: center;
+    border-radius: var(--radius);
+    background: #ecfdf3;
+    color: #027a48;
+    font-weight: 600;
+}

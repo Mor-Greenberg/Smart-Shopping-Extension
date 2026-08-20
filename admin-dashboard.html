@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Shopping — Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="admin-dashboard.css">
+</head>
+<body>
+    <div class="shell">
+        <aside class="sidebar">
+            <div class="sidebar__brand">
+                <p class="sidebar__eyebrow">Smart Shopping</p>
+                <h1>Admin</h1>
+                <p id="adminEmail" class="sidebar__email"></p>
+                <button id="backToPopupBtn" type="button" class="sidebar__back">← Back</button>
+            </div>
+            <nav class="sidebar__nav">
+                <button type="button" data-tab="overview" class="tab-btn is-active">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h8V3H3v10zm10 8h8V3h-8v18zM3 21h8v-6H3v6z"/></svg>
+                    Overview
+                </button>
+                <button type="button" data-tab="health" class="tab-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    System Health
+                </button>
+                <button type="button" data-tab="mapping" class="tab-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h6M4 17h6m4-10h6m-6 10h6M10 7a2 2 0 104 0 2 2 0 10-4 0m0 10a2 2 0 104 0 2 2 0 10-4 0"/></svg>
+                    Club ↔ Site Mapping
+                </button>
+                <button type="button" data-tab="registration" class="tab-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5M5 5h14a2 2 0 012 2v12l-4-2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg>
+                    Registration Page Management
+                </button>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div id="pageError" class="banner" hidden></div>
+            <div id="healthRunningBanner" class="health-running" hidden>
+                <span class="health-spinner health-spinner--sm" aria-hidden="true"></span>
+                <span>בודק סלקטורים באתרים…</span>
+            </div>
+
+            <section data-panel="overview" class="tab-panel">
+                <header class="page-head">
+                    <h2>Overview & Analytics</h2>
+                    <p>Registration, clubs, and question coverage</p>
+                </header>
+
+                <div class="kpi-grid">
+                    <article class="card card--hover">
+                        <p class="card__label">Total Registered Users</p>
+                        <p id="kpiTotalUsers" class="card__kpi">—</p>
+                    </article>
+                    <article class="card card--hover">
+                        <p class="card__label">Active Dynamic Questions</p>
+                        <p id="kpiActiveQuestions" class="card__kpi">—</p>
+                    </article>
+                    <article class="card card--hover">
+                        <p class="card__label">Total Successful Searches</p>
+                        <p id="kpiSuccessfulSearches" class="card__kpi">—</p>
+                        <p class="card__hint">Comparisons that found a cheaper price</p>
+                    </article>
+                    <article class="card card--hover">
+                        <p class="card__label">Total Money Saved</p>
+                        <p id="kpiMoneySaved" class="card__kpi">—</p>
+                        <p class="card__hint">System-wide savings (₪)</p>
+                    </article>
+                    <article class="card card--hover">
+                        <p class="card__label">Cache Hits / Shared Data</p>
+                        <p id="kpiCacheHits" class="card__kpi">—</p>
+                        <p class="card__hint">Served from DB, scraper skipped</p>
+                    </article>
+                </div>
+
+                <article class="card card--table savers-card">
+                    <div class="savers-head">
+                        <h3>Top Savers</h3>
+                        <p>Money saved per user</p>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>User</th>
+                                <th>Money Saved</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topSaversBody"></tbody>
+                    </table>
+                </article>
+
+                <div class="dist-grid">
+                    <article class="card card--hover">
+                        <h3>Users by Country</h3>
+                        <div id="countryList"></div>
+                    </article>
+                    <article class="card card--hover">
+                        <h3>Top Consumer Clubs</h3>
+                        <div id="clubList"></div>
+                    </article>
+                    <article class="card card--hover">
+                        <h3>Question Answers</h3>
+                        <div id="answersList"></div>
+                    </article>
+                </div>
+            </section>
+
+            <section data-panel="health" class="tab-panel" hidden>
+                <header class="page-head page-head--row">
+                    <div>
+                        <h2>System Health</h2>
+                        <p>Run a selector check manually. Results are stored in the database.</p>
+                    </div>
+                    <button id="runHealthBtn" type="button" class="btn-primary">Run Health Check Now</button>
+                </header>
+
+                <div class="health-table-wrap">
+                    <div id="healthCheckOverlay" class="health-overlay" hidden>
+                        <div class="health-overlay__card">
+                            <div class="health-spinner" aria-hidden="true"></div>
+                            <p>Running selector health check</p>
+                            <span>Visiting Super-Pharm, Mashbir, and Shufersal…</span>
+                        </div>
+                    </div>
+                    <div class="card card--table">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Site Name</th>
+                                <th>Status</th>
+                                <th>Latency</th>
+                                <th>Last Checked</th>
+                                <th>Error Log</th>
+                            </tr>
+                        </thead>
+                        <tbody id="healthTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </section>
+
+            <section data-panel="mapping" class="tab-panel" hidden>
+                <header class="page-head">
+                    <h2>Club ↔ Site Mapping</h2>
+                    <p>Pick which consumer clubs each retail site accepts. Every site can support several clubs, and the badges appear next to that site in the extension.</p>
+                </header>
+
+                <div id="mappingGrid" class="mapping-grid"></div>
+            </section>
+
+            <section data-panel="registration" class="tab-panel" hidden>
+                <header class="page-head">
+                    <h2>ניהול דף הרשמה</h2>
+                    <p>Registration Page Management</p>
+                </header>
+
+                <article class="card">
+                    <h3>Fixed / Mandatory Fields</h3>
+                    <div class="locked-grid">
+                        <div class="locked-field">
+                            <span>Email</span>
+                            <strong>Required · locked</strong>
+                        </div>
+                        <div class="locked-field">
+                            <span>Country</span>
+                            <strong>Required · Israel 🇮🇱 / USA 🇺🇸</strong>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <h3>Consumer Clubs</h3>
+                    <div id="clubGrid" class="club-admin-grid"></div>
+                    <form id="clubForm" class="club-add-form">
+                        <input id="clubName" type="text" required placeholder="Club name">
+                        <input id="clubImageUrl" type="url" placeholder="Image URL (optional)">
+                        <button type="submit" class="btn-primary">Add New Club</button>
+                    </form>
+                </article>
+
+                <article class="card form-card">
+                    <h3>Dynamic / Statistical Questions</h3>
+                    <form id="questionForm">
+                        <label class="field">
+                            <span>Question</span>
+                            <input id="questionText" type="text" required placeholder="e.g. How did you hear about us?">
+                        </label>
+                        <label class="field">
+                            <span>Question Type</span>
+                            <select id="questionType">
+                                <option value="open_text" selected>Open Text</option>
+                                <option value="multiple_choice">Multiple Choice</option>
+                            </select>
+                        </label>
+                        <div id="optionsPanel" class="options-panel" hidden>
+                            <div class="options-add">
+                                <input id="optionInput" type="text" placeholder="Add an option">
+                                <button id="addOptionBtn" type="button" class="btn-secondary">Add Option</button>
+                            </div>
+                            <ul id="optionsList" class="options-list"></ul>
+                        </div>
+                        <div class="form-row">
+                            <label class="check">
+                                <input id="questionRequired" type="checkbox">
+                                Is Required?
+                            </label>
+                            <button type="submit" class="btn-primary">Add Question</button>
+                        </div>
+                    </form>
+                </article>
+
+                <div class="card card--table">
+                    <ul id="questionList" class="question-list"></ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="admin-dashboard.js"></script>
+</body>
+</html>

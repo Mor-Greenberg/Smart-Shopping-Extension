@@ -34,6 +34,9 @@ async function main() {
 }
 
 main().catch(err => {
-    console.error('Migration failed:', err.message);
+    console.error('Migration failed:', err.message || err.code || err);
+    if (err.code) console.error('code:', err.code);
+    if (err.detail) console.error('detail:', err.detail);
+    if (err.stack) console.error(err.stack);
     process.exit(1);
 });

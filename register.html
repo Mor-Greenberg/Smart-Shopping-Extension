@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Shopping — Registration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="register.css">
+</head>
+
+<body>
+    <main class="register-page">
+        <header class="register-header">
+            <h1>Smart Shopping</h1>
+            <p>הרשמה מהירה לפני השימוש בתוסף</p>
+        </header>
+
+        <form id="registerForm" class="register-form" novalidate>
+            <div class="field">
+                <label for="email">Email *</label>
+                <input id="email" name="email" type="email" required autocomplete="email"
+                    placeholder="you@example.com" aria-describedby="emailError">
+                <p id="emailError" class="field-error" role="alert" hidden></p>
+            </div>
+
+            <div class="field">
+                <label for="country">Country *</label>
+                <select id="country" name="country" required>
+                    <option value="" disabled selected>Select country</option>
+                    <option value="IL">Israel 🇮🇱</option>
+                    <option value="US">USA 🇺🇸</option>
+                </select>
+            </div>
+
+            <fieldset class="field field--clubs">
+                <legend>Consumer clubs</legend>
+                <p class="field-hint">Select the clubs you belong to</p>
+                <div id="clubsContainer" class="club-grid"></div>
+            </fieldset>
+
+            <div id="dynamicQuestionsContainer" hidden></div>
+
+            <p id="formError" class="form-error" role="alert" hidden></p>
+
+            <button id="submitBtn" type="submit" class="btn-primary">Complete registration</button>
+        </form>
+
+        <p id="successMessage" class="success-message" hidden>
+            Registration complete! You can close this tab and open the extension again.
+        </p>
+    </main>
+
+    <script src="auth.js"></script>
+    <script src="register.js"></script>
+</body>
+
+</html>

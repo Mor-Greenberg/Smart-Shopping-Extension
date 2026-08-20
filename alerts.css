@@ -1,0 +1,431 @@
+/* alerts.css — personal area (my details + price drops).
+   Loaded after popup.css so it inherits the shared tokens and 400px frame. */
+
+body {
+    min-height: 600px;
+}
+
+.card--profile {
+    border: 1px solid rgba(140, 0, 255, 0.12);
+    background: linear-gradient(180deg, #fff 0%, #fdfaff 100%);
+}
+
+.card--drops {
+    background: linear-gradient(180deg, #ffffff 0%, #fefcff 100%);
+    box-shadow: var(--shadow-float);
+}
+
+.card--drops .card__title {
+    border-right-color: var(--deal-green);
+}
+
+/* ── My details ── */
+
+.profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.profile-field__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--label);
+}
+
+.profile-field__value {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--purple-deep);
+    word-break: break-all;
+}
+
+.club-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.club-chips__empty {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.club-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px 4px 4px;
+    border-radius: 999px;
+    background: rgba(140, 0, 255, 0.08);
+    border: 1px solid rgba(140, 0, 255, 0.16);
+}
+
+.club-chip__mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--white);
+    box-shadow: 0 1px 4px rgba(69, 6, 147, 0.18);
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--purple-deep);
+}
+
+.club-chip__logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.club-chip__label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--purple-deep);
+}
+
+.club-chip__remove {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-family: system-ui, -apple-system, Arial, sans-serif;
+    font-size: 0.6rem;
+    line-height: 1;
+    color: var(--label);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.club-chip__remove:hover {
+    color: var(--white);
+    background: var(--pink);
+}
+
+.club-chip__remove:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 1px;
+}
+
+.club-add {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.club-add__select {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-hebrew);
+    font-size: 0.78rem;
+    color: var(--text);
+    background: var(--white);
+}
+
+.club-add__select:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 1px;
+}
+
+.club-add__btn {
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-hebrew);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--white);
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.club-add__btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.club-add__btn:not(:disabled):hover {
+    transform: translateY(-1px);
+}
+
+.profile-status {
+    margin: 10px 0 0;
+    min-height: 1em;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.profile-status--muted {
+    color: var(--text-muted);
+}
+
+.profile-status--ok {
+    color: var(--deal-green-dark);
+}
+
+.profile-status--error {
+    color: var(--pink);
+}
+
+/* ── Price drops ── */
+
+.alerts-state {
+    margin: 0;
+    padding: 14px 4px;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.alerts-state--error {
+    color: var(--pink);
+}
+
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Card ── */
+
+/* Sits inside .card--drops, so it stays flat and leans on a border rather than
+   stacking a second shadow. */
+.alert-card {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    padding: 12px 12px 12px 30px;
+    border: 1px solid rgba(140, 0, 255, 0.14);
+    border-radius: var(--radius-sm);
+    background: #fcfaff;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.alert-card:hover {
+    border-color: rgba(140, 0, 255, 0.3);
+    background: #f8f4ff;
+}
+
+/* ── Price drop: green, and it pops ── */
+
+@keyframes drop-pop-in {
+    0% { transform: scale(0.94); opacity: 0; }
+    55% { transform: scale(1.04); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes drop-pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.42);
+    }
+    50% {
+        transform: scale(1.018);
+        box-shadow: 0 0 0 8px rgba(18, 183, 106, 0);
+    }
+}
+
+.alert-card--dropped {
+    border-color: var(--deal-green);
+    background: rgba(18, 183, 106, 0.09);
+    animation:
+        drop-pop-in 0.45s ease-out,
+        drop-pulse 2.4s ease-in-out 0.45s infinite;
+}
+
+.alert-card--dropped:hover {
+    border-color: var(--deal-green-dark);
+    background: rgba(18, 183, 106, 0.14);
+}
+
+.alerts-summary {
+    margin: 0 0 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.alerts-summary--hot {
+    color: var(--deal-green-dark);
+}
+
+.alert-card__tag {
+    align-self: flex-start;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.63rem;
+    font-weight: 700;
+    color: var(--label);
+    background: rgba(140, 0, 255, 0.08);
+}
+
+.alert-card__tag--drop {
+    color: var(--white);
+    background: linear-gradient(135deg, var(--deal-green), var(--deal-green-dark));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .alert-card--dropped { animation: none; }
+}
+
+.alert-card--removing {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.alert-card__remove {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-family: system-ui, -apple-system, Arial, sans-serif;
+    font-size: 0.72rem;
+    line-height: 1;
+    color: var(--label);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.alert-card__remove:hover {
+    color: var(--white);
+    background: var(--pink);
+}
+
+.alert-card__remove:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 1px;
+}
+
+/* ── Media ── */
+
+.alert-card__media {
+    flex: 0 0 68px;
+    width: 68px;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: #f6f2ff;
+}
+
+.alert-card__image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.alert-card__image-fallback {
+    font-size: 1.4rem;
+    color: rgba(69, 6, 147, 0.35);
+}
+
+/* ── Body ── */
+
+.alert-card__body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.alert-card__name {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.alert-card__prices {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.alert-card__price-old {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--label);
+    text-decoration: line-through;
+}
+
+.alert-card__price-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--label);
+}
+
+.alert-card__price-new {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--purple-deep);
+}
+
+.alert-card--dropped .alert-card__price-new {
+    color: var(--deal-green-dark);
+}
+
+.alert-card__save {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--deal-green-dark);
+    background: rgba(18, 183, 106, 0.12);
+}
+
+.alert-card__site {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.alert-card__cta {
+    align-self: flex-start;
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--white);
+    text-decoration: none;
+    background: linear-gradient(135deg, var(--purple-deep), var(--violet));
+    box-shadow: 0 4px 14px rgba(140, 0, 255, 0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.alert-card__cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(140, 0, 255, 0.34);
+}
+
+.alert-card__cta:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+}

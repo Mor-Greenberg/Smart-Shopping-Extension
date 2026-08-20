@@ -1,5 +1,29 @@
 // content.js
 
+/**
+ * On single-page storefronts the previous product often stays in the DOM as a
+ * hidden modal or collapsed panel, so a plain querySelector can return the
+ * product the user just left. Visible nodes are preferred everywhere, with a
+ * fallback to the first match for content that is legitimately collapsed.
+ */
+function isElementVisible(el) {
+    if (!el) return false;
+    if (el.closest('[hidden], [aria-hidden="true"]')) return false;
+
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+
+    const style = window.getComputedStyle(el);
+    return style.visibility !== 'hidden'
+        && style.display !== 'none'
+        && style.opacity !== '0';
+}
+
+function orderByVisibility(nodes) {
+    const list = [...nodes];
+    return [...list.filter(isElementVisible), ...list.filter(el => !isElementVisible(el))];
+}
+
 function normalizeEan(value) {
     const digits = String(value || '').replace(/\D/g, '');
     if (digits.length >= 8 && digits.length <= 14) return digits;
@@ -7,11 +31,22 @@ function normalizeEan(value) {
 }
 
 function extractEanByLabel(label) {
-    const elements = document.querySelectorAll('p, span, div, td, th, li, dt, dd, label');
+    const elements = orderByVisibility(
+        document.querySelectorAll('p, span, div, td, th, li, dt, dd, label, strong, b')
+    );
+    const wanted = String(label || '').replace(/[:\s]/g, '');
 
     for (const el of elements) {
         const text = (el.textContent || '').trim();
-        if (text !== label) continue;
+        const compact = text.replace(/[:\s]/g, '');
+        const isLabel = text === label
+            || compact === wanted
+            || text.startsWith(label);
+
+        if (!isLabel) continue;
+
+        const selfEan = normalizeEan(text.replace(label, ''));
+        if (selfEan) return selfEan;
 
         const next = el.nextElementSibling;
         if (next) {
@@ -27,6 +62,8 @@ function extractEanByLabel(label) {
                 const ean = normalizeEan(children[i].textContent);
                 if (ean) return ean;
             }
+            const parentEan = normalizeEan(parent.textContent.replace(label, ''));
+            if (parentEan) return parentEan;
         }
     }
 
@@ -34,15 +71,21 @@ function extractEanByLabel(label) {
 }
 
 function extractEanByDom(strategy) {
-    const el = document.querySelector(strategy.selector);
-    if (!el) return null;
+    for (const el of orderByVisibility(document.querySelectorAll(strategy.selector))) {
+        const text = el.innerText || el.textContent || '';
 
-    if (strategy.regex) {
-        const match = (el.innerText || '').match(strategy.regex);
-        if (match?.[1]) return normalizeEan(match[1]);
+        if (strategy.regex) {
+            const match = text.match(strategy.regex);
+            const ean = match?.[1] ? normalizeEan(match[1]) : null;
+            if (ean) return ean;
+            continue;
+        }
+
+        const ean = normalizeEan(text);
+        if (ean) return ean;
     }
 
-    return normalizeEan(el.innerText);
+    return null;
 }
 
 function extractEanByScript(strategy) {
@@ -147,33 +190,50 @@ function parsePriceFromText(text) {
     return null;
 }
 
-function walkJsonLdForPrice(obj, paths) {
-    if (!obj || typeof obj !== 'object') return null;
-
+function jsonLdOfferPrice(obj, paths) {
     for (const path of paths || ['offers.price']) {
-        if (path.startsWith('offers.')) {
-            const field = path.split('.')[1];
-            const offers = obj.offers;
-            const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
-            for (const offer of list) {
-                const val = parseFloat(String(offer?.[field]).replace(/,/g, ''));
-                if (isValidPrice(val)) return val;
-            }
+        if (!path.startsWith('offers.')) continue;
+
+        const field = path.split('.')[1];
+        const offers = obj.offers;
+        const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
+
+        for (const offer of list) {
+            const val = parseFloat(String(offer?.[field]).replace(/,/g, ''));
+            if (isValidPrice(val)) return val;
         }
+    }
+    return null;
+}
+
+function collectJsonLdCandidates(obj, paths, out) {
+    if (!obj || typeof obj !== 'object') return;
+
+    const price = jsonLdOfferPrice(obj, paths);
+    if (price) {
+        const url = typeof obj.url === 'string'
+            ? obj.url
+            : (typeof obj['@id'] === 'string' ? obj['@id'] : null);
+        out.push({ price, url });
     }
 
     if (Array.isArray(obj['@graph'])) {
-        for (const node of obj['@graph']) {
-            const found = walkJsonLdForPrice(node, paths);
-            if (found) return found;
-        }
+        for (const node of obj['@graph']) collectJsonLdCandidates(node, paths, out);
     }
+}
 
-    return null;
+function describesCurrentPage(url) {
+    if (!url) return false;
+    try {
+        return new URL(url, window.location.href).pathname === window.location.pathname;
+    } catch (_) {
+        return false;
+    }
 }
 
 function extractPriceFromJsonLd(strategy) {
     const paths = strategy.paths || ['offers.price', 'offers.lowPrice'];
+    const candidates = [];
 
     for (const script of document.querySelectorAll("script[type='application/ld+json']")) {
         const raw = (script.textContent || '').trim();
@@ -181,27 +241,27 @@ function extractPriceFromJsonLd(strategy) {
 
         try {
             const data = JSON.parse(raw);
-            const items = Array.isArray(data) ? data : [data];
-            for (const item of items) {
-                const price = walkJsonLdForPrice(item, paths);
-                if (price) return price;
+            for (const item of (Array.isArray(data) ? data : [data])) {
+                collectJsonLdCandidates(item, paths, candidates);
             }
         } catch (_) {
             const offerMatch = raw.match(/"price"\s*:\s*"?([\d.]+)"?/);
             if (offerMatch) {
                 const val = parseFloat(offerMatch[1]);
-                if (isValidPrice(val)) return val;
+                if (isValidPrice(val)) candidates.push({ price: val, url: null });
             }
         }
     }
 
-    return null;
+    if (!candidates.length) return null;
+
+    // A leftover block from the previously viewed product carries its own url,
+    // so the one describing this page wins.
+    const match = candidates.find(c => describesCurrentPage(c.url));
+    return (match || candidates[0]).price;
 }
 
-function extractPriceFromDataAttributes(strategy) {
-    const root = document.querySelector(strategy.selector);
-    if (!root) return null;
-
+function priceFromDataRoot(root, strategy) {
     for (const attr of strategy.attributes || []) {
         const raw = root.getAttribute(attr);
         if (raw == null || raw === '') continue;
@@ -217,17 +277,63 @@ function extractPriceFromDataAttributes(strategy) {
     return parsePriceFromText(root.innerText || root.textContent || '');
 }
 
+function extractPriceFromDataAttributes(strategy) {
+    // meta tags carry no box, so visibility ordering must not exclude them.
+    const nodes = document.querySelectorAll(strategy.selector);
+    const ordered = strategy.selector.startsWith('meta')
+        ? [...nodes]
+        : orderByVisibility(nodes);
+
+    for (const root of ordered) {
+        const price = priceFromDataRoot(root, strategy);
+        if (price) return price;
+    }
+
+    return null;
+}
+
 function extractPriceFromDom(strategy) {
     const excludeClosest = strategy.excludeClosest || [];
+    const matches = [];
 
     for (const sel of strategy.selectors || []) {
         for (const el of document.querySelectorAll(sel)) {
             if (excludeClosest.some(ex => el.closest(ex))) continue;
-            const price = parsePriceFromText(el.innerText || el.textContent || '');
-            if (price) return price;
+            matches.push(el);
         }
     }
 
+    for (const el of orderByVisibility(matches)) {
+        const price = parsePriceFromText(el.innerText || el.textContent || '');
+        if (price) return price;
+    }
+
+    return null;
+}
+
+function extractPriceFromScript(strategy) {
+    const regex = strategy.regex instanceof RegExp
+        ? strategy.regex
+        : new RegExp(strategy.regex, 'i');
+
+    for (const script of document.querySelectorAll('script')) {
+        const match = (script.innerText || '').match(regex);
+        if (!match?.[1]) continue;
+        const val = parseFloat(String(match[1]).replace(/,/g, ''));
+        if (isValidPrice(val)) return val;
+    }
+    return null;
+}
+
+function extractPriceFromPageScan(strategy) {
+    const html = document.documentElement.innerHTML;
+    for (const pattern of strategy.patterns || []) {
+        const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, 'i');
+        const match = html.match(regex);
+        if (!match?.[1]) continue;
+        const val = parseFloat(String(match[1]).replace(/,/g, ''));
+        if (isValidPrice(val)) return val;
+    }
     return null;
 }
 
@@ -243,6 +349,10 @@ function extractCurrentPrice(config) {
             price = extractPriceFromDataAttributes(strategy);
         } else if (strategy.type === 'dom') {
             price = extractPriceFromDom(strategy);
+        } else if (strategy.type === 'script') {
+            price = extractPriceFromScript(strategy);
+        } else if (strategy.type === 'page-scan') {
+            price = extractPriceFromPageScan(strategy);
         }
 
         if (price) return price;
@@ -298,6 +408,22 @@ function extractProductImageUrl(config) {
     return null;
 }
 
+let lastExtraction = null;
+
+/**
+ * A soft navigation can outrun the storefront's own rendering: the URL and
+ * title already point at the new product while the barcode node still holds the
+ * old one. Reporting that as a real answer is what made the popup compare the
+ * previous product, so it is flagged and the popup retries instead.
+ */
+function isStaleExtraction(url, title, ean) {
+    if (!lastExtraction || ean === 'unknown_sku') return false;
+
+    return url !== lastExtraction.url
+        && title !== lastExtraction.title
+        && ean === lastExtraction.ean;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'GET_PRODUCT_DATA') {
         const hostname = window.location.hostname;
@@ -337,6 +463,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
 
         const imageUrl = extractProductImageUrl(config);
+        const url = window.location.href;
+        const stale = isStaleExtraction(url, productName, ean);
+
+        if (!stale) {
+            lastExtraction = { url, title: productName, ean };
+        }
 
         const payload = {
             sku: ean,
@@ -345,10 +477,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             brand,
             productName,
             imageUrl,
-            hostname
+            hostname,
+            url,
+            stale
         };
 
-        console.log('[Smart Shopping] Data successfully extracted:', payload);
+        if (stale) {
+            console.log('[Smart Shopping] Page still shows the previous product, asking for a retry');
+        } else {
+            console.log('[Smart Shopping] Data successfully extracted:', payload);
+        }
+
         sendResponse(payload);
     }
     return true;

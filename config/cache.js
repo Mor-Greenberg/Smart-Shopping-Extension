@@ -11,7 +11,6 @@ module.exports = {
     ORIGIN_SITES: [
         'shop.super-pharm.co.il',
         '365mashbir.co.il',
-        'www.shufersal.co.il',
-        'ksp.co.il'
+        'www.shufersal.co.il'
     ]
 };

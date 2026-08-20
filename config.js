@@ -14,6 +14,13 @@ const SITES_CONFIG = {
         scrape: {
             waitForSelector: "script[type='application/ld+json'], .item-price, .price-container",
             renderDelay: 3500,
+            searchPageHints: ["/search", "?q="],
+            productNameVerification: {
+                enabled: true,
+                trustEanMatch: true,
+                minSimilarity: 0.25,
+                minMatchingTokens: 2
+            },
             priceExtraction: [
                 {
                     type: "json-ld",
@@ -38,7 +45,12 @@ const SITES_CONFIG = {
             ],
             navigation: {
                 productPageHints: ["/p/"],
-                productLinkSelectors: ["a[href*='/p/']"]
+                productLinkSelectors: ["a[href*='/p/']"],
+                singleResultFallback: false,
+                tryProductLinks: true,
+                firstResultFallback: false,
+                verifyEanOnProductPage: true,
+                maxProductAttempts: 5
             }
         }
     },
@@ -122,56 +134,7 @@ const SITES_CONFIG = {
                 firstResultFallback: false,
                 firstResultFallbackOnlyWhenSingle: true,
                 verifyEanOnProductPage: true,
-                maxProductAttempts: 15
-            }
-        }
-    },
-
-    "ksp.co.il": {
-        name: "KSP",
-        displayName: "KSP",
-        siteType: "retail",
-        enabled: false, // dev only — set true before prod
-        compareRole: "origin-only",
-        requiresEan: true,
-        noEanMessage: "מוצר זה לא נתמך בחיפוש באתרים אחרים (אין ברקוד)",
-        searchUrlPattern: "https://ksp.co.il/web/cat/?search={{ean}}",
-        eanExtraction: {
-            strategies: [
-                { type: "label", label: "ברקוד" },
-                {
-                    type: "page-scan",
-                    patterns: [/ברקוד[\s\S]{0,120}?(\d{8,14})/i, /"barcode"\s*:\s*"(\d{8,14})"/i]
-                },
-                { type: "script", regex: /"barcode"\s*:\s*"(\d{8,14})"/i }
-            ]
-        },
-        scrape: {
-            // KSP is a client-rendered React app; wait for the product anchors to
-            // hydrate (networkidle2 + waitForSelector) instead of a fixed delay.
-            // NOTE: KSP sits behind Cloudflare bot-management that currently returns a
-            // hard HTTP 403 "KSP Forbidden 403" page to automated browsers (verified:
-            // headless+headed, stealth, persistent profile all blocked). These render
-            // knobs only take effect once the 403 block is bypassed (cf_clearance cookie
-            // injection, a Cloudflare-aware proxy/API, or curl-impersonate).
-            renderDelay: 4500,
-            waitUntil: "networkidle2",
-            searchWaitForSelector: "a[href*='/web/item/'], a[href*='/web/item']",
-            searchWaitTimeout: 12000,
-            searchPageHints: ["/web/cat/", "?search="],
-            priceExtraction: [
-                {
-                    type: "dom",
-                    selectors: [".rtl-69i1ev", ".product-price", "[class*='price']"]
-                }
-            ],
-            navigation: {
-                productPageHints: ["/web/item"],
-                productLinkSelectors: ["a[href*='/web/item/']", "a[href*='/web/item']"],
-                singleResultFallback: false,
-                tryProductLinks: true,
-                firstResultFallback: true,
-                maxProductAttempts: 10
+                maxProductAttempts: 3
             }
         }
     },
@@ -180,15 +143,32 @@ const SITES_CONFIG = {
         name: "Shufersal",
         displayName: "שופרסל",
         siteType: "retail",
+        requiresEan: true,
+        noEanMessage: "מוצר זה לא נתמך בםצפחיפוש באתרים אחרים (אין ברקוד)",
         searchUrlPattern: "https://www.shufersal.co.il/online/he/search?text={{ean}}",
         eanExtraction: {
-            type: "dom",
-            selector: ".productCode .text",
-            regex: /(\d+)/
+            strategies: [
+                { type: "label", label: "ברקוד" },
+                { type: "script", regex: /"(?:gtin13|gtin|ean|barcode)"\s*:\s*"(\d{8,14})"/i },
+                {
+                    type: "page-scan",
+                    patterns: [
+                        /ברקוד[\s\S]{0,80}?(\d{8,14})/i,
+                        /"(?:gtin13|gtin|ean|barcode)"\s*:\s*"(\d{8,14})"/i
+                    ]
+                },
+                { type: "dom", selector: ".productCode .text", regex: /(\d{13,14})/ }
+            ]
         },
         scrape: {
             waitForSelector: ".productPrice, .actualPrice, .miglog-prod-price, script[type='application/ld+json']",
             renderDelay: 5000,
+            productNameVerification: {
+                enabled: true,
+                trustEanMatch: true,
+                minSimilarity: 0.25,
+                minMatchingTokens: 2
+            },
             priceExtraction: [
                 {
                     type: "json-ld",
@@ -230,6 +210,11 @@ const SITES_CONFIG = {
     }
 };
 
+const COMPARE_UI_CONFIG = {
+    searchTimeoutMs: 30000,
+    notFoundMessage: 'המוצר לא נמצא באתרים אחרים'
+};
+
 function isSiteEnabled(cfg) {
     return Boolean(cfg) && cfg.enabled !== false;
 }
@@ -255,10 +240,19 @@ function getSiteConfig(hostname) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SITES_CONFIG, getSiteConfig, isSiteEnabled, resolveSiteEntry };
+    module.exports = {
+        SITES_CONFIG,
+        COMPARE_UI_CONFIG,
+        getSiteConfig,
+        isSiteEnabled,
+        resolveSiteEntry
+    };
 }
 
 if (typeof window !== 'undefined') {
+    window.SITES_CONFIG = SITES_CONFIG;
+    window.COMPARE_UI_CONFIG = COMPARE_UI_CONFIG;
     window.getSiteConfig = getSiteConfig;
     window.isSiteEnabled = isSiteEnabled;
+    window.resolveSiteEntry = resolveSiteEntry;
 }

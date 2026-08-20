@@ -41,13 +41,14 @@ async function trackProduct(pool, payload) {
         }
     }
 
-    const userId = await ensureUser(pool, {
+    const userRow = await ensureUser(pool, {
         installationId: installation_id,
         extensionVersion: extension_version,
         locale,
         platform,
         timezone
     });
+    const userId = userRow.id;
 
     await ensureProduct(pool, ean, { productName: product_name, brand });
 

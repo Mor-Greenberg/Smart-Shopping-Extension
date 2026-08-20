@@ -87,6 +87,28 @@ async function getCachedOffers(pool, ean, siteKeys) {
     return { fresh, staleOrMissing };
 }
 
+async function getUsableCachedOffer(pool, ean, siteKey) {
+    const { rows } = await pool.query(
+        `SELECT site_key, product_url, price, exists_on_site, collected_at
+         FROM product_site_offers
+         WHERE ean = $1 AND site_key = $2`,
+        [ean, siteKey]
+    );
+
+    const row = rows[0];
+    if (!row) return null;
+    if (isValidOffer(row) || isPartialOffer(row)) {
+        return {
+            exists: true,
+            cachedPrice: row.price != null ? Number(row.price) : null,
+            productUrl: row.product_url,
+            collectedAt: row.collected_at,
+            fromCache: true
+        };
+    }
+    return null;
+}
+
 async function ensureProduct(pool, ean, meta = {}) {
     await pool.query(
         `INSERT INTO products (ean, product_name, brand)
@@ -179,6 +201,7 @@ module.exports = {
     isPartialOffer,
     isNegativeCache,
     getCachedOffers,
+    getUsableCachedOffer,
     ensureProduct,
     getOfferPrice,
     upsertOffer
